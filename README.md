@@ -1,75 +1,75 @@
-###hashJoin
+# hashJoin
 
-##implementations
+## implementations
 Benchmarks with hash join variations. 32bit key, 32bit values.
 
 Hashing Methods:
 probe linprobe lsb: Least Significant Bit Hashing.
 
-#sequential
+### sequential
 Std implementation with sequential keys, non-shuffled tuples
-#random
+### random
 Build and probe tuples are shuffled
-#pipeline
+### pipeline
 Build kernel is overlapped with DtoH and HtoD transfer.
-#sharedMem
+### sharedMem
 Build and probe in shared memory (not working)
-#bindings
+### bindings
 Files linked by the other implementations
 
 
 
 
-###hellsJoin
+# hellsJoin
 
-##implementations
+## implementations
 HellsJoin implementations.
-#HellsJoin compiles
+### HellsJoin
 reimplementation of hellsjoin
 
-#HellsJoin batch compiles
+### HellsJoin batch compiles
 hellsjoin with batchwise processing
 
 
-#Experimental implementations:
-#HellsJoin less streams compiles
+### Experimental implementations:
+### HellsJoin less streams
 hellsjoin impl with threadpool
 
-#HellsJoin new streams compiles
+### HellsJoin new streams
 hellsjoin impl with different execution order
 
-#HellsJoin pre app compiles
+### HellsJoin pre app
 hellsjoin impl with different execution order
 
-#HellsJoin cpu compiles
+### HellsJoin cpu
 hellsjoin impl on cpu. based on Phillips work.
 
-##nestedloopbench
+## nestedloopbench
 Runtime measurement of Hells join compare kernel
 
-##computationBenchmark
+## computationBenchmark
 Measurements of HellsJoin compare kernel variations.
 Different allocation types, batch execution, shared memory usage.
 
 
 
-###transfer benchmark
+# transfer benchmark
 Benchmarks for measuring the transfer runtime.
 Two memory regions where _in_ is copied into _out_ using a copy inside a gpu kernel.
 One benchmark measurement includes: the copy of _in_ from host to device (HtoD), the copy from _in_ to _out_ on the device, and the copy of _out_ from device to host (DtoH).
-##host
+## host
 Both memory regions are in pinned host memory.
-##device
+## device
 Both memory regions are in device memory.
-##cas
+## cas
 Copy using compare and swap operation. Both memory regions are in device memory.
-##cpu
+## cpu
 Referernce Measure using the cpu: Copy with the cpu on pinned host memory.
-##deviceAndCopy
+## deviceAndCopy
 Both memory regions are in pinned host memory. Copy between host and device is performed using cudaMemcpy call.
-##pipeline
+## pipeline
 HtoD, kernel and DtoH are overlapped. Both memory regions are in pinned host memory.
-##block
+## block
 Transfer blockwise
-##shared memory benchmark
+## shared memory benchmark
 Benchmark for measuring the shared memory vs. global memory runtime.
