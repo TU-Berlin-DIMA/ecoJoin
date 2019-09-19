@@ -14,7 +14,7 @@ __global__
 void kernel(int *mutex){
 	while (true){
 		while (*mutex == 0){}
-		*mutex = 2;
+		*mutex = 2; //atomic inc
 	}
 }
 
@@ -25,6 +25,6 @@ int main(){
 
 	kernel<<<1,10>>>(mutex);
 	*mutex = 1;
-	while(*mutex == 1){}
+	while(*mutex == 1){} // < 11
 	std::cout << "mutex is "<< *mutex << "\n";
 }
