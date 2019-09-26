@@ -268,9 +268,10 @@ void startFileTest(std::string filename1, std::string filename2, int rows){;
 		while (records0[i].timestamp == k && i < rows) {
 			new_tuple = records0[i];
 
-			compare_kernel_ipt<<<blocksize, gridsize,0 ,cudastream1>>>(new_tuple, compare_output_s1,  etpw, compareTuples_s2_comp);
+			compare_kernel_ipt<<<blocksize, gridsize, 0, cudastream1>>>(new_tuple, compare_output_s1,  etpw, compareTuples_s2_comp);
 			add_new_tuple_device<<<1, 1, 0, cudastream1>>>(new_tuple, stream1, etpw, compareTuples_s1_comp);
 
+			//cudaStreamSynchronize(cudastream1);
 			cudaStreamSynchronize(cudastream3);
 
 			int *compare_output_new = (int *)malloc(((etpw / 32) + 1)* sizeof(int));
@@ -288,7 +289,9 @@ void startFileTest(std::string filename1, std::string filename2, int rows){;
 			add_new_tuple_device<<<1, 1, 0, cudastream3>>>(new_tuple, stream2, etpw, compareTuples_s2_comp);
 
 			cudaStreamSynchronize(cudastream1);
-
+			//cudaStreamSynchronize(cudastream3);
+			
+			// No other kenel is invoced until the result is saved 
 			int *compare_output_new = (int *)malloc(((etpw / 32) + 1)* sizeof(int));
 			std::memcpy(compare_output_new, compare_output_s2, sizeof(int) * ((etpw / 32) + 1));
 			//queue.push(queueElm(compare_output_new, stream2, new_tuple));
