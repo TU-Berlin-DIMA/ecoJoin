@@ -1,0 +1,11 @@
+# arm-probe configuration file
+#
+# setup name
+msm8916-qrd
+
+# <device path>
+/dev/ttyACM0
+ V5.0	0.100000	1	-0.001504	0.003651	-0.000139	0.000299	0	V5.0	DC_IN	#ff0000	SoC
+# V5.0	0.1000	2	-0.067035	0.068425	-0.102770	0.102790	0	V5.0	DC_IN	#ff0000	SoC
+# V5.0	0.1000	3	-0.017300	0.009855	-0.000381	0.000481	0	V5.0	DC_IN	#ff0000	SoC
+

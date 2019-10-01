@@ -1,0 +1,92 @@
+Building notes
+2013-05-06  Andy Green <andy.green@linaro.org>
+2018-02-13  Vincent Guittot <vincent.guittot@linaro.org>
+
+**** Introduction
+
+These sources are GPL2, you can find them here:
+
+http://git.linaro.org/gitweb?p=tools/arm-probe.git;a=summary
+
+arm-probe is a tool that collects data from the Arm Energy probe device.
+
+**** Requirements
+
+This probject uses GNU autotools.
+
+Make sure you have 
+
+ - libtool
+ - automake
+ - autoconf
+
+packages installed.
+
+**** Compilation
+
+$ ./autogen.sh
+$ ./configure
+$ make
+$ make install
+
+To build the websockets-based daemon, you will need to build libwebsockets,
+built and installed on your box, which you can get from here
+
+git://git.libwebsockets.org/libwebsockets
+
+It uses CMake, see README.build in that project for examples of how to
+configure, build and install.
+
+After building and installing libwebsocket:
+
+$ ./autogen.sh
+$ ./configure --with-daemon
+$ make
+$ make install
+
+You might want to use "./configure --prefix=/usr", which will later install
+the built libraries and apps in /usr/bin, /usr/lib etc instead of the
+default /usr/local/...   If you want to do that, notice that on 64-bit systems
+(eg, on Fedora...) you will also need to give --libdir=/usr/lib64 which is
+otherwise taken care of automatically.
+
+**** Tree
+
+* libarmep is a library wrapping all of the access and protocol complexity
+    of dealing with one or more arm energy probes
+
+* arm-probe is the commandline utilty for the arm probes which issues
+    output on stdout and adds columns on to stdin if anything is piped
+    there.  The tabbed ascii format is compatible with gnuplot.  Actually
+    the code for this is very small since libarmep copes with the dirty
+    business.
+
+* aepd provides the realtime HTML5 web interface part, run aepd and open
+    a chrome browser window to http://localhost:15164 for a realtime scope-
+    type display
+
+**** Usage
+
+arm-probe utility uses a config file to describe the power rails that are
+monitored. This config file provides for each channel:
+-shunt resistor value
+-AEP channel
+-some autozero correction factors
+-pretty name
+-parent power rail
+-RGB color used by aepd
+-class
+
+A typical config file :
+
+# arm-probe configuration file
+#
+# setup name
+Hikey960
+
+# <device path>
+/dev/serial/by-id/usb-NXP_SEMICOND_ARM_Energy_Probe_S_NO36600001-if00
+ DCIN	0.082000	3	-0.015796	0.129143	-0.001024	0.000970	0	Main	VBAT	#ff0000	SoC
+ VDD	0.033000	1	-0.114682	0.049773	-0.000439	0.001129	0	VDD_4V2	DCIN	#ff0000	SoC
+ SYS	0.100000	2	-0.155547	0.177045	-0.000242	0.000600	0	SYS_5V	DCIN	#ff0000	SoC
+

@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<!--
+/*
+ * Author: Andy Green <andy.green@linaro.org> 
+ * Copyright (C) 2012 Linaro, LTD
+ * Libwebsocket demo code (C) 2010-2012 Andy Green <andy@warmcat.com>
+ * Repo: http://git.linaro.org/gitweb?p=tools/arm-probe.git;a=summary
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ *
+ */
+
+td.heading { font-size:9pt; font: Arial; font-weight:bold; vertical-align:middle; text-align:center; background:#e0e0e0; color:#a0a0a0; padding:3px; -webkit-border-radius:16px; -moz-border-radius:16px; border-radius:16px; }
+-->
+<html lang="en">
+<head>
+<style type="text/css">
+	div.meas { text-align:right; }
+	td.measname { text-align:left; }
+	div.topmeas { text-align:right; font-weight:bold; }
+	td.topmeasname { text-align:left; ; font-weight:bold; }
+	div.greymeas { text-align:right; opacity: 0.2; }
+	div.greytopmeas { text-align:right; font-weight:bold; opacity: 0.2; }
+
+	div.caliper_invalid { font-size:8pt; font: Arial; font-weight:normal; opacity: 0.2; }
+	div.caliper_valid { font-size:8pt; font: Arial; font-weight:normal; background-color:#f0f0f0; color:#000000 }
+	div.control { font-size:9pt; font: Arial; font-weight:bold; color:#808080; }
+	div.info { font-size:8pt; font: Arial; font-weight:normal; text-align:right; color:#000000; }
+
+	div.groupwhite { height:60px; vertical-align:middle; text-align:center; padding:4px; -webkit-border-radius:10px; -moz-border-radius:10px; border-radius:10px; }
+	div.group { height:60px; vertical-align:middle; text-align:center; background:#f0f0f0; padding:4px; -webkit-border-radius:10px; -moz-border-radius:10px; border-radius:10px; }
+	div.group2 { vertical-align:middle; text-align:center; background:#f0f0f0; padding:4px; -webkit-border-radius:10px; -moz-border-radius:10px; border-radius:10px; }
+	td.heading { font-size:9pt; font: Arial; font-weight:bold; vertical-align:middle; text-align:center; color:#a0a0a0; }
+	div.group::after { content: "."; visibility: hidden; }
+	div.group img { vertical-align: middle; }
+	div.btn { height:12px; width: 12px; vertical-align:middle; text-align:center; padding:2px; -webkit-border-radius:8px; -moz-border-radius:8px; border-radius:8px; }
+
+</style>
+<meta charset=utf-8 http-equiv="Content-Language" content="en"/>
+<title>ARM Energy Probe aepd UI</title>
+</head>
+<body>
+<header>
+</header>
+<article>
+<table>
+	<tr>
+		<td>
+			<table>
+				<tr>
+					<td height="100%">
+						<div class="groupwhite"><a href="http://git.linaro.org/gitweb?p=tools/arm-probe.git;a=summary"><img src="linaro-logo-32.png"></a></div>
+					</td>
+					<td>
+					    <div class="group">
+						<table height="100%">
+							<tr>
+								<td>
+									<div class="control">Time zoom</div>
+								</td>
+								<td>
+									<div id=tb class="info"></div>
+								</td>
+							</tr>
+							<tr>
+								<td colspan="2">
+									<input type="range" id="rate" min="0" max="14" onchange="update_options();">
+								</td>
+							</tr>
+						</table>
+					    </div>
+					</td>
+					<td>
+					    <div class="group">
+						<table height="100%">
+							<tr>
+								<td>
+									<div class="control">Power zoom</div>
+								</td>
+								<td>
+									<div id=pz class="info"></div>
+								</td>
+							</tr>
+							<tr>
+								<td colspan="2">
+									<input type="range" id="scale" step="0.1" min="0.1" max="20" onchange="update_options();">
+								</td>
+							</tr>
+						</table>
+					    </div>
+					</td>
+					<td height="100%"  style="width:140px;">
+					    <div class="group">
+						<table height="100%" width="100%">
+							<tr style="vertical-align:top">
+								<td>
+								    <table height="100%" width="100%">
+									<tr style="vertical-align:top">
+										<td>
+											<div class="control" style="text-align:left" width="50%">Search</div>
+										</td>
+										<td>
+											<div id="trigval" class="info"></div>
+								    		</td>
+									</tr>
+								    </table>
+								</td>
+							</tr>
+							<tr>
+							  <td>
+							    <table height="100%">
+								<tr style="vertical-align:top">
+								    <td id="trigsrccolour"></td>
+								    <td id="trigsrcname"></td>
+							        </tr>
+							    </table>
+							  </td>
+							</tr>
+						</table>
+					    </div>
+					</td>
+					<td height="100%">
+						<div class="group" height="100%">
+							<div class="control"><input type="checkbox" id="run" checked="checked" onchange="update_options();">Run</input></div>
+							<div id="val" class="info">&nbsp;</div>
+						</div>
+					</td>
+					<td height="100%"  style="width:100px;">
+						<div class="group">
+							<div class="control"><input type="checkbox" id="measure" checked="checked" onchange="update_measure();">Measure</input></div>
+							<div id="val2" class="caliper_invalid"></div>
+						</div>
+					</td>
+					<td height="100%"  style="width:100px;">
+						<div class="group">
+							<div class="control"><button id="zero" onclick="do_zero();">Zero</button></div>
+						</div>
+					</td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+	<tr style="vertical-align:top">
+		<td style="vertical-align:top">
+			<div id="pane0" class="group2">
+				<canvas id="canvas0">
+			</div>
+		</td>
+		<td style="vertical-align:top">
+			<div class="group2">
+				<div style="vertical-align:top;" id="cha" class="caliper_invalid"></div>
+			</div>
+		</td>
+	</tr>
+</table>
+
+<script>
+
+var caliper_headroom = 16;
+var x_axis_height = 16 + /* scroll */ 16;
+var y_axis_width = 32 + /* trigger */ 20;
+var xlen = 600;
+var ylen = 400;
+
+var ring_size = xlen + 1;
+var max_chans = 8 * 3;
+var ringV = new Array(max_chans);
+var ringA = new Array(max_chans);
+var ringW = new Array(max_chans);
+var ring_head = 0;
+var total = 0;
+var running = 1;
+var last_running = 0;
+
+var connection = 0;
+var chans = 0;
+
+var start = 10;
+var main_start = 25;
+
+var rate;
+var watts_fullscale = 4.0;
+var canvas = new Array(3);
+var ctx = new Array(3);
+
+var socket;
+
+var bounce = 0;
+var last_head = -1;
+
+var ch_name_to_index = new Array();
+var ch_name = new Array();
+var ch_supply = new Array();
+var ch_colour = new Array();
+var ch_class = new Array();
+var ch_flags = new Array();
+var ch_order = new Array();
+
+var height = new Array(xlen);
+
+var ov = 0;
+var worst_depth;
+var order;
+var do_title = 0;
+var sent_time = 0;
+var peak_time = 0;
+var ring_start_time = 0;
+var ring_head_time = 0;
+
+var viewport_offset_time = 0;
+var dirty = 1;
+var loading = 0;
+
+var caliper;
+var cal_pos = new Array(2);
+var measure = 0;
+var caliper_drag_index = -1;
+var caliperV = new Array();
+var caliperA = new Array();
+var caliperW = new Array();
+var caliper_valid = 0;
+
+var trigger_png;
+var trigger_level = 0.05;
+var trigger_drag = 0;
+var trigger_channel = 0;
+
+var scroll_drag = 0;
+
+var rates = [   10000,    5000,    2000,    1000,    500,    200,    100,    50,    20,    10,       5,       4,       3,       2,       1 ];
+var intervals = [ 50,       20,      10,       5,      2,    1,    1,   0.5,  0.25,   0.1,    0.05,    0.05,    0.025,    0.025,    0.01 ]; 
+var sigs =      [  0,        0,       0,       0,      0,    0,    0,     1,     2,     1,       2,       2,        3,        3,       2 ];
+
+cal_pos[0] = 100;
+cal_pos[1] = 200;
+
+var chan_view = -1;
+
+function btest()
+{
+
+}
+
+function event_wheel(e)
+{
+	var f;
+
+	e = e ? e : window.event;
+	var raw = e.detail ? e.detail : e.wheelDelta;
+	var normal = e.detail ? e.detail * -1 : e.wheelDelta / 40;
+//	document.getElementById('val').innerHTML = 
+//		"&nbsp;Raw Value: " + raw + "&nbsp;Normalized Value: " + normal;
+
+	f = viewport_offset_time + (normal / 3) * rates[rate] * 0.0001 * xlen / 10;
+	if (f < (-ring_head_time + ((rates[rate] * 0.0001 * xlen))) || f > 0)
+		return cancelEvent(e);
+
+	viewport_offset_time = f;
+
+//	document.getElementById("val").textContent = viewport_offset_time.toFixed(4)+" "+(-ring_head_time).toFixed(4);
+
+	update_options();
+
+	return cancelEvent(e);
+}
+
+function set_scroll_left_x(xp)
+{
+	xp = (xlen + y_axis_width) - xp;
+
+	if (xp < 0)
+		xp = 0;
+	if (xp > (xlen + y_axis_width) /*- get_scrollbar_xpos(1) */)
+		xp = (xlen + y_axis_width) /* - get_scrollbar_xpos(1) */;
+
+	viewport_offset_time = - (xp / (xlen + y_axis_width)) * (ring_head_time - (rates[rate] * 0.0001 * xlen));
+	document.getElementById("val").textContent = xp.toFixed(4) + " " + viewport_offset_time.toFixed(3) + " " + ring_head_time.toFixed(4);
+
+
+	update_options();
+}
+
+function event_drag_start(e)
+{
+	var x, y, n, lscroll;
+ 
+	if (e.offsetX) {
+		x = e.offsetX;
+		y = e.offsetY;
+	} else {
+		x = e.layerX - offsetX;
+		y = e.layerY - offsetY;
+	}
+
+	trigger_drag = 0;
+	caliper_drag_index = -1;
+	scroll_drag = 0;
+
+	/*
+	 * dragging the scrollbar?
+	 */
+	if (y > ylen + x_axis_height + caliper_headroom - 16) {
+
+//		lscroll = get_scrollbar_xpos(0);
+
+//		if (x > lscroll && x < lscroll + get_scrollbar_xpos(1)) {
+//			scroll_drag = x - lscroll;
+
+			scroll_drag = 1;
+			e.stopPropagation ();
+			return;
+//		}
+	}
+
+	/*
+	 * dragging a caliper?
+	 */
+	for (n = 0; n < 2; n++) {
+		if (x > cal_pos[n] - 8 && x < cal_pos[n] + 16) {
+			caliper_drag_index = n;
+			e.stopPropagation ();
+			return;
+		}
+	}
+
+	/*
+	 * dragging the trigger level?
+	 */
+	n = ylen -(ylen * (trigger_level / watts_fullscale)) + caliper_headroom;
+	if (n < caliper_headroom)
+		n = caliper_headroom;
+
+	if (x > xlen && y > (n - 8) && y < (n + 8)) {
+		trigger_drag = 1;
+		e.stopPropagation ();
+		return;
+	}
+
+	e.stopPropagation ();
+}
+
+function event_drag(e)
+{
+	var x, y, n; 
+	if (e.offsetX) {
+		x = e.offsetX;
+		y = e.offsetY;
+	} else {
+		x = e.layerX - offsetX;
+		y = e.layerY - offsetY;
+	}
+
+	if (x >= xlen)
+		x = xlen - 1;
+
+	x -= 8;
+
+	/* caliper drag? */
+
+	if (caliper_drag_index >= 0) {
+		if (cal_pos[caliper_drag_index] != x) {
+			cal_pos[caliper_drag_index] = x;
+			dirty = 1;
+			caliper_changed();
+			e.stopPropagation ();
+			return false;
+		}
+	}
+
+	/* trigger drag? */
+
+	if (trigger_drag && y <= ylen) {
+	n = ylen -(ylen * (trigger_level / watts_fullscale)) + caliper_headroom;
+
+		trigger_level = ((ylen - (y - caliper_headroom)) / ylen) *  watts_fullscale;
+		dirty = 1;
+		trigger_level_changed();
+		e.stopPropagation ();
+		return false;
+	}
+
+	/* scrollbar drag? */
+
+	if (scroll_drag != 0) {
+		set_scroll_left_x(x - scroll_drag);
+		e.stopPropagation ();
+		return false;
+	}
+
+	e.stopPropagation ();
+	return false;
+}
+
+function event_drag_end(e)
+{
+	caliper_drag_index = -1;
+	trigger_drag = 0;
+	scroll_drag = 0;
+	dirty = 1;
+}
+
+function update_measure()
+{
+	measure = document.getElementById("measure").checked;
+	localStorage["aepd.measure"] = measure;
+	dirty = 1;
+	caliper_changed();
+}
+
+function caliper_changed()
+{
+	var f;
+
+	if (!measure) {
+		document.getElementById("val2").textContent = "";
+		return;
+	}
+
+	f = rates[rate] * 0.0001 * (cal_pos[0] - cal_pos[1]);
+	if (f < 0)
+		f = -f;
+	
+	document.getElementById("val2").innerHTML = units(f)+"s<br>"+ units(1 / f)+"Hz";
+
+	localStorage["aepd.caliper0"] = cal_pos[0];
+	localStorage["aepd.caliper1"] = cal_pos[1];
+
+	/*
+	 * caliper position in s behind rhs
+	 */
+
+	if (socket)
+		if (socket.readyState == 1)
+			socket.send("c" + ((xlen - cal_pos[0]) * rates[rate] * 0.0001)+" "+
+					  ((xlen - cal_pos[1]) * rates[rate] * 0.0001)+"\n");
+}
+
+function trigger_level_changed()
+{
+	document.getElementById("trigval").textContent = units(trigger_level)+"W";
+	if (ov != 0) {
+		document.getElementById("trigsrccolour").innerHTML = '<div class="btn" style="background: '+ch_colour[trigger_channel]+';"></div>';
+		document.getElementById("trigsrcname").innerHTML = '<div class="info">'+ch_name[trigger_channel]+'</div>';
+	}
+	localStorage["aepd.trigger_level"] = trigger_level;
+	localStorage["aepd.trigger_channel"] = trigger_channel;
+
+	if (socket)
+		if (socket.readyState == 1)
+			socket.send("T" + trigger_level + "\n");
+}
+
+function do_zero()
+{
+	if (socket)
+		if (socket.readyState == 1)
+			socket.send("Z\n");
+}
+
+function read_local_stg(stg_name, element_name, default_value)
+{
+	var n;
+
+	if (localStorage[stg_name]) {
+		n = parseFloat(localStorage[stg_name]);
+		if (element_name.length)
+			document.getElementById(element_name).value = n;
+		return n;
+	}
+
+	return default_value;
+}
+
+rate = read_local_stg("aepd.rate", "rate", rate);
+watts_fullscale = read_local_stg("aepd.scale", "scale", watts_fullscale);
+if (localStorage["aepd.measure"])
+	document.getElementById("measure").checked = localStorage["aepd.measure"];
+
+cal_pos[0] = parseFloat(read_local_stg("aepd.caliper0", "", 100));
+cal_pos[1] = parseFloat(read_local_stg("aepd.caliper1", "", 200));
+chan_view = parseFloat(read_local_stg("aepd.chan_view", "", -1));
+trigger_level = parseFloat(read_local_stg("aepd.trigger_level", "", 0.05));
+trigger_channel = parseFloat(read_local_stg("aepd.trigger_channel", "", 0));
+trigger_level_changed();
+
+update_measure();
+
+
+if (cal_pos[0] < 0 || isNaN(cal_pos[0]))
+	cal_pos[0] = 100;
+if (cal_pos[1] < 0 || isNaN(cal_pos[1]))
+	cal_pos[1] = 200;
+
+if (cal_pos[0] >= xlen)
+	cal_pos[0] = xlen - 1;
+if (cal_pos[1] > xlen)
+	cal_pos[1] = xlen - 1;
+
+
+caliper_changed();
+
+const CHFLAG_TOPLEVEL = 1;
+const CHFLAG_VIRTUAL = 2;
+
+function channel_index_from_name(name)
+{
+	var n;
+
+	for (n = 0; n < ov; n++)
+		if (ch_name[n] == name)
+			return n;
+
+	return undefined;
+}
+
+function get_toplevel_supply(name)
+{
+	var n, m;
+
+	n = channel_index_from_name(name);
+	if (n == undefined)
+		return undefined;
+
+	if (n >= chans)
+		ch_flags[n] |= CHFLAG_VIRTUAL;
+
+	m = channel_index_from_name(ch_supply[n]);
+	if (m == undefined) {
+		ch_flags[n] |= CHFLAG_TOPLEVEL;
+		return name;
+	}
+
+	return get_toplevel_supply(ch_supply[n]);
+}
+
+function update_chans(n)
+{
+	dirty = 1;
+	chan_view = n;
+	localStorage["aepd.chan_view"] = chan_view;
+	channel_list_changed();
+}
+
+function do_all_children(name, depth, total_depth)
+{
+	var n, cl, v;
+
+	if (depth > worst_depth)
+		worst_depth = depth;
+
+	n = channel_index_from_name(name);
+
+	if (n >= chans)
+		fcol = "#808080";
+	else
+		fcol = "#000000";
+
+	if (total_depth) {
+		tab += '<tr>';
+		tab += '<td colspan="'+ depth +'">&nbsp;</td>';
+		v = n;
+		if (ch_flags[n] & CHFLAG_TOPLEVEL)
+			v = -1;
+		tab += '<td><div class="btn" style="background: '+ch_colour[n]+'; cursor:crosshair;" onclick="update_chans('+v+');"></div></td>';
+		tab += '<td colspan="'+(total_depth - depth)+'" ';
+		if (ch_flags[n] & CHFLAG_TOPLEVEL) {
+			tab += ' class="topmeasname"';
+			cl = "topmeas";
+		} else {
+			tab += ' class="measname"';
+			cl = "meas";
+		}
+		if (chan_view != -1 && n != chan_view)
+			cl = "grey"+cl;
+		tab += '><font style="color:' + fcol + '">';
+		tab += name;
+		tab += '</font></td><td><div id="v'+n+'" class="'+cl+'"></div></td><td><div id="a'+n+'" class="'+cl+'"></div></td><td><div id="w'+n+'" class="'+cl+'"></div></td></tr>';
+		ch_order[order++] = n;
+	}
+	for (n = 0; n < ov; n++) {
+		if (ch_supply[n] == name)
+			do_all_children(ch_name[n], depth + 1, total_depth);
+	}
+}
+
+function get_appropriate_ws_url()
+{
+        var pcol;
+        var u = document.URL;
+
+        /*
+         * We open the websocket encrypted if this page came on an
+         * https:// url itself, otherwise unencrypted
+         */
+
+        if (u.substring(0, 5) == "https") {
+                pcol = "wss://";
+                u = u.substr(8);
+        } else {
+                pcol = "ws://";
+                if (u.substring(0, 4) == "http")
+                        u = u.substr(7);
+        }
+
+        u = u.split('/');
+
+        return pcol + u[0];
+}
+
+function caliper_data_update()
+{
+	var n;
+
+	if (caliper_valid == 0) {
+		document.getElementById("cha").className = "caliper_invalid";
+		document.getElementById("val2").className = "caliper_invalid";
+		return;
+	}
+
+	document.getElementById("cha").className = "caliper_valid";
+	document.getElementById("val2").className = "caliper_valid";
+
+	for (n = 0; n < chans; n++) {
+		document.getElementById("v"+n).textContent = units3(caliperV[n])+"V";
+		document.getElementById("a"+n).textContent = units3(caliperA[n])+"A";
+		document.getElementById("w"+n).textContent = units3(caliperW[n])+"W";
+	}
+}
+
+function channel_list_changed()
+{
+	var n, b, found, done_list;
+
+	done_list = new Array;
+	worst_depth = 0;
+	order = 0;
+	b = "?";
+
+	for (n = 0; n < ov; n++) {
+
+		b = get_toplevel_supply(ch_name[n]);
+
+		found = 0;
+		for (y = 0; y < done_list.length; y++)
+			if (done_list[y] == b) {
+				found = 1;
+				y = done_list.length;
+			}
+
+		if (found)
+			continue;
+		done_list.push(b);
+
+		do_all_children(b, 1, 0);
+	}
+
+	do_title = 0;
+
+	tab = '<table><tr><td class="heading" colspan="'+(worst_depth + 2)+'">Rail</td>';
+	tab+= '<td class="heading" width="45">Voltage</td>';
+	tab+= '<td class="heading" width="80">Current</td>';
+	tab+= '<td class="heading" width="80">Power</td>';
+	tab += '</tr>';
+
+	done_list = new Array;
+	for (n = 0; n < ov; n++) {
+
+		b = get_toplevel_supply(ch_name[n]);
+
+		found = 0;
+		for (y = 0; y < done_list.length; y++)
+			if (done_list[y] == b) {
+				found = 1;
+				y = done_list.length;
+			}
+
+		if (found)
+			continue;
+		done_list.push(b);
+
+		do_all_children(b, 1, worst_depth + 1);
+	}
+
+	tab += "</table>";
+
+	document.getElementById("cha").innerHTML = tab;
+	/* saved trigger channel may not have existed before */
+	trigger_level_changed();
+}
+
+function conn_retry()
+{
+	var r1, r2, r3, x, y, chan, z, block, channel_data = 0, tpt;
+
+	if (connection)
+		return;
+
+	socket = new WebSocket(get_appropriate_ws_url(), "linaro.aepd");
+
+	try {
+		socket.onopen = function() {
+			/*
+			 * clear it down
+			 */
+			for (n = 0; n < xlen; n++)
+				for (i = 0; i < max_chans; i++)
+					ringW[i][n] = 0;
+
+			caliper = new Image();
+			caliper.src = "caliper.png";
+
+			trigger_png = new Image();
+			trigger_png.src = "trigger.png";
+
+			last_head = -1;
+			ring_head = -1;
+			grayOut(false);
+			connection = 1;
+			update_options();
+			caliper_valid = 0;
+			caliper_data_update();
+		} 
+
+		socket.onmessage = function got_packet(msg) {
+
+			/*
+			 * 'time' in capture context update
+			 */
+
+			if (msg.data[0] == 't') {
+
+				f = msg.data.substr(1);
+				y = f.split(' ');
+				sent_time = parseFloat(y[0]);
+				tpt = sent_time; // + ((rates[rate] * 0.0001) * xlen);
+				ring_start_time = parseFloat(y[1]);
+				ring_head_time = parseFloat(y[2]);
+				running = y[3];
+				if (running != 0)
+					document.getElementById("run").checked = true;
+				else
+					document.getElementById("run").checked = false;
+				loading = xlen - 1;
+
+				return;
+			}
+
+			/*
+			 * calipers out of range
+			 */
+
+			if (msg.data[0] == 'C') {
+				caliper_valid = 0;
+				caliper_data_update();
+				return;
+			}
+
+			/*
+			 * Triggered
+			 */
+
+			if (msg.data[0] == 'T') {
+				/* triggered */
+				return;
+			}
+
+			/*
+			 * caliper measurement info
+			 */
+
+			if (msg.data[0] == 'c') {
+				caliper_valid = 1;
+				f = msg.data.substr(1);
+				y = f.split(',');
+
+				ring_head_time = parseFloat(y[0]);
+
+				chan = 0;
+				while (chan < (y.length - 1)) {
+
+					x = y[chan + 1].split(' ');
+					if (x.length != 3) {
+						chan++;
+						continue;
+					}
+
+					if (x[0].charAt(0) == '-')
+						 r1 = (-x[0].substring(1));
+					else
+						r1 = (+x[0]);
+
+					if (x[1].charAt(0) == '-')
+						 r2 = (-x[1].substring(1));
+					else
+						r2 = (+x[1]);
+
+					if (x[2].charAt(0) == '-')
+						 r3 = (-x[2].substring(1));
+					else
+						r3 = (+x[2]);
+
+			
+					caliperV[chan] = r1;
+					caliperA[chan] = r2;
+					caliperW[chan] = r3;
+
+					chan++;	
+				}
+				caliper_data_update();
+				return;
+			}
+
+			/*
+			 * list of channel (incl virtual ones) names
+			 * and other attributes
+			 */
+
+			if (msg.data[0] == '=') {
+				channel_data = 1;
+				do_title = 1;
+				ov = 0;
+			} else
+				channel_data = 0;
+
+			/*
+			 * default message, sample set
+			 */
+
+			z = msg.data.split(';');
+
+			block = 0;
+			while (block < (z.length - 1)) {
+
+				y = z[block].split(',');
+
+				if (channel_data) {
+					if (!block)
+						f = y[0].substr(1);
+					else
+						f = y[0];
+					ch_name[ov] = f;
+					ch_supply[ov] = y[1];
+					ch_colour[ov] = y[2];
+					ch_class[ov] = y[3];
+					ch_order[ov] = -1;
+					ch_flags[ov] = 0;
+					ov++;
+					block++;
+					continue;
+				}
+
+
+				chan = 0;
+				while (chan < y.length) {
+
+					x = y[chan].split(' ');
+					if (x.length != 3) {
+						chan++;
+						continue;
+					}
+
+					if (x[0].charAt(0) == '-')
+						 r1 = (-x[0].substring(1));
+					else
+						r1 = (+x[0]);
+
+					if (x[1].charAt(0) == '-')
+						 r2 = (-x[1].substring(1));
+					else
+						r2 = (+x[1]);
+
+					if (x[2].charAt(0) == '-')
+						 r3 = (-x[2].substring(1));
+					else
+						r3 = (+x[2]);
+
+			
+					ringV[chan][ring_head] = r1;
+					ringA[chan][ring_head] = r2;
+					ringW[chan][ring_head] = r3;
+
+					chan++;	
+				}
+
+				chans = chan;
+
+				ring_head++;
+				if (ring_head == ring_size)
+					ring_head = 0;
+
+				tpt += (rates[rate] * 0.0001);
+
+				if (loading)
+					loading--;
+
+				total++;
+				block++;
+			}
+
+			if (channel_data == 0)
+				peak_time = tpt;
+
+			if (!channel_data && do_title)
+				channel_list_changed();
+
+			if (!loading)
+				dirty = 1;
+
+		} 
+
+		socket.onclose = function(){
+			connection = 0;
+			grayOut(true,{'zindex':'499'});
+			setTimeout("conn_retry();", 1000);
+		}
+	} catch(exception) {
+//		alert('<p>Error' + exception);
+//		setTimeout("conn_retry", 1000);
+	}
+}
+  
+function _trim(f)
+{
+	var f, c;
+
+	while (f.charAt(f.length - 1) == '0')
+		f = f.substring(0, f.length - 1);
+	if (f.charAt(f.length - 1) == '.')
+		f = f.substring(0, f.length - 1);
+
+	return f;
+}
+
+function units(n) {
+	var s = '';
+
+	if (n < 0) {
+		s = '-';
+		n = -n;
+	}
+
+	if (n > 1000000000)
+		return s + _trim((n / 1000000000).toFixed(3)) + 'G';
+
+	if (n > 1000000)
+		return s + _trim((n / 1000000).toFixed(3)) + 'M';
+
+	if (n > 1000)
+		return s + _trim((n / 1000).toFixed(3)) + 'K';
+
+	if (n >= 1)
+		return s + _trim(n.toFixed(3));
+
+	if (n >= 0.001)
+		return s+ _trim((n * 1000).toFixed(3)) + 'm';
+
+	if (n >= 0.000001)
+		return s+ _trim((n * 1000000).toFixed(3)) + 'u';
+
+	if (n >= 0.000000001)
+		return s+ _trim((n * 1000000000).toFixed(3)) + 'n';
+
+	return ('0');
+}
+
+function units3(n) {
+	var s = '';
+
+	if (n < 0) {
+		s = '-';
+		n = -n;
+	}
+
+	if (n > 1000000000)
+		return s + ((n / 1000000000).toFixed(3)) + 'G';
+
+	if (n > 1000000)
+		return s + ((n / 1000000).toFixed(3)) + 'M';
+
+	if (n > 1000)
+		return s + ((n / 1000).toFixed(3)) + 'K';
+
+	if (n >= 1)
+		return s + (n.toFixed(3));
+
+	if (n >= 0.001)
+		return s+ ((n * 1000).toFixed(3)) + 'm';
+
+	if (n >= 0.000001)
+		return s+ ((n * 1000000).toFixed(3)) + 'u';
+
+	if (n >= 0.000000001)
+		return s+ ((n * 1000000000).toFixed(3)) + 'n';
+
+	return ('0');
+}
+
+function get_scrollbar_xpos(which)
+{
+	var ro, rx, extent, x2, xx;
+
+	x2 = xlen + y_axis_width;
+	extent = rates[rate] * 0.0001 * xlen;
+	ro = ring_head_time /*+ viewport_offset_time */;
+	rx = ro - extent;
+	if (rx < 0)
+		rx = 0;
+
+	x = (x2 * (rx / peak_time));
+	xx = x2 * (extent / peak_time);
+	if (xx < 10) { // minimum width
+		x -= (10 - xx) / 2;
+		xx = 10;
+	}
+	if (which == 0)
+		return x;
+	return xx;
+}
+
+function show(cv)
+{
+	var n, p, y, chan, q, z, peak, ro, rx, extent, x2, xx, q1,
+		effective_channels, eff_peak_time;
+
+	if (!connection || !ring_size)
+		return;
+
+	if (!dirty)
+		return;
+
+	eff_peak_time = peak_time;
+
+	dirty = 0;
+
+	last_running = running;
+
+	if (trigger_drag != 0)
+		effective_channels = trigger_channel;
+	else
+		effective_channels = chan_view;
+
+	ctx = canvas[0].getContext("2d");
+	ctx.save();
+//	ctx.globalCompositeOperation = "copy";
+	ctx.globalAlpha = 1.0;
+
+	ctx.fillStyle = '#ffffff';
+	if (running == 0)
+		ctx.fillStyle = '#f0f0f0';
+	ctx.fillRect(0,  0, xlen + y_axis_width, ylen + x_axis_height + caliper_headroom);
+
+
+	/*
+	 * time scrollbar
+	 */
+	ctx.fillStyle = 'rgb(128,128,128)';
+	ctx.lineWidth = 0;
+
+	x2 = xlen + y_axis_width;
+	extent = rates[rate] * 0.0001 * xlen;
+	ro = (ring_head_time - ring_start_time) + viewport_offset_time;
+	rx = ro - extent;
+	if (rx < 0)
+		rx = 0;
+
+	x = (x2 * (rx / (ring_head_time - ring_start_time)));
+	xx = x2 * (extent / (ring_head_time - ring_start_time));
+	if (xx < 10) { // minimum width
+		x -= (10 - xx) / 2;
+		xx = 10;
+	}
+
+//	document.getElementById("val").textContent = (ring_head_time - ring_start_time)+" "+ro+" "+extent+" "+rx+" "+x;
+
+	ctx.fillRect(x, ylen + x_axis_height + caliper_headroom - 12, xx, 8);
+/*
+	ctx.fillRect(get_scrollbar_xpos(0),
+		ylen + x_axis_height + caliper_headroom - 12,
+		get_scrollbar_xpos(1), 8);
+*/
+
+	/*
+	 * waveform drawing
+	 */
+
+	q1 = ring_head;
+	last_head = q1;
+
+	for (n = 0; n < xlen; n++)
+		height[n] = caliper_headroom + ylen -2;
+
+	chan = 0;
+	while (chan < ch_order.length) {
+
+		z = ch_order[chan];
+		if (z >= chans || z == undefined) {
+			chan++;
+			continue;
+		}
+
+
+		if (effective_channels >= 0 && z != effective_channels) {
+			chan++;
+			continue;
+		}
+
+		ctx.lineWidth = 1;
+		ctx.strokeStyle = ch_colour[z];
+
+		q = q1;
+
+		for (n = xlen - 1; n >= 0; n--) {
+
+			ctx.beginPath();
+
+			if (q >= 0)
+				p = (ringW[z][q] * (ylen - 4)) / watts_fullscale;
+
+			if ((ch_flags[z] & (CHFLAG_TOPLEVEL | CHFLAG_VIRTUAL)) == CHFLAG_TOPLEVEL) {
+				ctx.moveTo(n + 0.5, caliper_headroom + ylen - 2);
+				ctx.lineTo(n + 0.5, caliper_headroom + ylen - 2 - p);
+			} else {
+
+				ctx.moveTo(n + 0.5, height[n]);
+				ctx.lineTo(n + 0.5, height[n] - p);
+
+				height[n] -= p;
+			}
+			ctx.stroke();
+
+			q--;
+			if (q < 0)
+				q = ring_size - 1;
+
+		}
+
+		chan++;
+	}
+
+	/* x (time) axis marks */
+
+	ro = eff_peak_time /* + viewport_offset_time; */
+	r = ro;
+	/* rates[rate] * 0.0001s per pixel */
+	time_pp = rates[rate] * 0.0001;
+	limit = r - (xlen * time_pp);
+	interval = intervals[rate];
+
+	ctx.font = "8pt Arial";
+	ctx.textAlign = "center";
+	ctx.strokeStyle = '#c0c0c0';
+	ctx.fillStyle = '#000000';
+	ctx.globalAlpha = 0.7;
+
+	r = (((r / interval) >> 0) + 1) * interval;
+
+	while (r >= limit) {
+		var f;
+
+		x = xlen - (xlen * ((ro - r) / (ro - limit)));
+
+		f = r.toFixed(sigs[rate]);
+		if (sigs[rate]) {
+			while (f.charAt(f.length - 1) == '0')
+				f = f.substring(0, f.length - 1);
+			if (f.charAt(f.length - 1) == '.')
+				f = f.substring(0, f.length - 1);
+		}
+		ctx.lineWidth = 1;
+		if ( r.toFixed(0) == r)
+			ctx.lineWidth = 2;
+
+		if (x < xlen) {
+			ctx.beginPath();
+			ctx.moveTo(x, caliper_headroom + ylen);
+			ctx.lineTo(x, caliper_headroom + 1);
+			ctx.stroke();
+		}
+		ctx.fillText(f, x, caliper_headroom + ylen + 16 - 2);
+
+		r -= interval;
+	}
+
+	/* Y (power) axis marks */
+
+	sig = 2;
+	interval = 0.01;
+	if (watts_fullscale >= 0.2)
+		interval = 0.05;
+	if (watts_fullscale >= 0.5) {
+		interval = 0.1;
+		sig = 1;
+	}
+	if (watts_fullscale >= 1) {
+		interval = 0.25;
+		sig = 2;
+	}
+	if (watts_fullscale >= 2) {
+		interval = 0.5;
+		sig = 1;
+	}
+	if (watts_fullscale >= 5) {
+		sig = 0;
+		interval = 1;
+	}
+
+	r = (((watts_fullscale / interval) >> 0) + 1) * interval;
+
+	while (r >= 0) {
+		var f;
+		
+		y = (ylen * ((watts_fullscale - r) / (watts_fullscale)));
+
+		f = r.toFixed(sig);
+		if (sig) {
+			while (f.charAt(f.length - 1) == '0')
+				f = f.substring(0, f.length - 1);
+			if (f.charAt(f.length - 1) == '.')
+				f = f.substring(0, f.length - 1);
+		}
+
+		ctx.lineWidth = 1;
+		if ( r.toFixed(0) == r)
+			ctx.lineWidth = 2;
+
+		if (y >= 0) {
+			ctx.beginPath();
+			ctx.moveTo(0, caliper_headroom + y - 2);
+			ctx.lineTo(xlen, caliper_headroom + y - 2);
+			ctx.stroke();
+		}
+
+		ctx.fillText(f, xlen + 16, caliper_headroom +y + 2);
+
+		r -= interval;
+	}
+
+	/*
+	 * calipers
+	 */
+
+	if (measure) {
+		ctx.strokeStyle = 'rgba(160, 160, 160, 0.5)';
+		ctx.lineWidth = 1;
+
+		for (n = 0; n < 2; n++) {
+			ctx.drawImage(caliper, cal_pos[n], 0);
+			ctx.beginPath();
+			ctx.moveTo(cal_pos[n] + 8, caliper_headroom);
+			ctx.lineTo(cal_pos[n] + 8, caliper_headroom + ylen - 2);
+			ctx.stroke();
+		}
+	}
+
+	/*
+	 * trigger
+	 */
+
+	ctx.lineWidth = 1;
+	ctx.strokeStyle = 'rgba(160, 160, 160, 0.5)';
+
+	y = ylen * trigger_level / watts_fullscale;
+	if (y >= ylen) {
+		y = ylen - 1;
+		ctx.globalAlpha = 0.3;
+	}
+
+	ctx.drawImage(trigger_png, xlen + 8, caliper_headroom + (ylen - y) - 2 - 8);
+	ctx.beginPath();
+	ctx.moveTo(0, caliper_headroom + (ylen - y) - 2);
+	ctx.lineTo(xlen + 32, caliper_headroom + (ylen - y) - 2);
+	ctx.stroke();
+
+	ctx.restore();
+}
+
+
+function update_options()
+{	
+	var run;
+	run = 0;
+
+	if (document.getElementById("run").checked)
+		run = 1;
+
+	rate = document.getElementById("rate").value;
+	if (!rate)
+		rate = 0;
+	localStorage["aepd.rate"] = document.getElementById("rate").value;
+	document.getElementById("tb").textContent = units(xlen * rates[rate] * 0.0001)+"s";
+
+	if (viewport_offset_time < (-ring_head_time /*+ ((rates[rate] * 0.0001 * xlen)) - 0.0001*/))
+		viewport_offset_time = (-ring_head_time /*+ ((rates[rate] * 0.0001 * xlen)) - 0.0001*/);
+
+	if (viewport_offset_time > 0)
+		viewport_offset_time = 0;
+
+	socket.send("r"+rates[rate]+" "+xlen+" "+run+" "+viewport_offset_time+"\n");
+	watts_fullscale = document.getElementById("scale").value;
+	localStorage["aepd.scale"] = document.getElementById("scale").value;
+	document.getElementById("pz").textContent = watts_fullscale + 'W';
+
+	caliper_changed();
+}
+
+/*
+ * This section around grayOut came from here:
+ * http://www.codingforums.com/archive/index.php/t-151720.html
+ * Assumed public domain
+ */
+
+function grayOut(vis, options) {
+	var options = options || {};
+	var zindex = options.zindex || 50;
+	var opacity = options.opacity || 70;
+	var opaque = (opacity / 100);
+	var bgcolor = options.bgcolor || '#000000';
+	var dark = document.getElementById('darkenScreenObject');
+
+	if (!dark) {
+		var tbody = document.getElementsByTagName("body")[0];
+		var tnode = document.createElement('div');
+		tnode.style.position = 'absolute';
+		tnode.style.top = '0px';
+		tnode.style.left = '0px';
+		tnode.style.overflow = 'hidden';
+		tnode.style.display ='none';
+		tnode.id = 'darkenScreenObject';
+		tbody.appendChild(tnode);
+		dark = document.getElementById('darkenScreenObject');
+	}
+	if (vis) {
+		dark.style.opacity = opaque;
+		dark.style.MozOpacity = opaque;
+		dark.style.filter ='alpha(opacity='+opacity+')';
+		dark.style.zIndex = zindex;
+		dark.style.backgroundColor = bgcolor;
+		dark.style.width = gsize(1);
+		dark.style.height = gsize(0);
+		dark.style.display ='block';
+		addEvent(window, "resize",
+			function() {
+				dark.style.height = gsize(0);
+				dark.style.width = gsize(1);
+			}
+		);
+	} else {
+		dark.style.display = 'none';
+		removeEvent(window, "resize",
+			function() {
+				dark.style.height = gsize(0);
+				dark.style.width = gsize(1);
+			}
+		);
+	}
+}
+
+function gsize(ptype)
+{
+	var h = document.compatMode == 'CSS1Compat' &&
+		!window.opera ?
+			document.documentElement.clientHeight :
+						document.body.clientHeight;
+	var w = document.compatMode == 'CSS1Compat' &&
+		!window.opera ? 
+			document.documentElement.clientWidth :
+						document.body.clientWidth;
+	if (document.body && 
+		    (document.body.scrollWidth || document.body.scrollHeight)) {
+		var pageWidth = (w > (t = document.body.scrollWidth)) ?
+					("" + w + "px") : ("" + (t) + "px");
+		var pageHeight = (h > (t = document.body.scrollHeight)) ?
+					("" + h + "px") : ("" + (t) + "px");
+	} else if (document.body.offsetWidth) {
+		var pageWidth = (w > (t = document.body.offsetWidth)) ?
+					("" + w + "px") : ("" + (t) + "px");
+		var pageHeight =(h > (t = document.body.offsetHeight)) ?
+					("" + h + "px") : ("" + (t) + "px");
+	} else {
+		var pageWidth = '100%';
+		var pageHeight = '100%';
+	}
+	return (ptype == 1) ? pageWidth : pageHeight;
+}
+
+function addEvent( obj, type, fn ) {
+	if ( obj.attachEvent ) {
+		obj['e' + type + fn] = fn;
+		obj[type+fn] = function() { obj['e' + type+fn]( window.event );}
+		obj.attachEvent('on' + type, obj[type + fn]);
+	} else
+		obj.addEventListener(type, fn, false);
+}
+
+function removeEvent( obj, type, fn ) {
+	if ( obj.detachEvent ) {
+		obj.detachEvent('on' + type, obj[type + fn]);
+		obj[type + fn] = null;
+	} else
+		obj.removeEventListener(type, fn, false);
+}
+
+/*
+ * end of grayOut related stuff
+ *
+ * requestAnimFrame stuff came from here
+ * http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+ * presumed public domain
+ */
+
+window.requestAnimFrame = (function(){
+	return  window.requestAnimationFrame     || 
+	      window.webkitRequestAnimationFrame || 
+	      window.mozRequestAnimationFrame    || 
+	      window.oRequestAnimationFrame      || 
+	      window.msRequestAnimationFrame     || 
+	      function(/* function */ callback, /* DOMElement */ element){
+			window.setTimeout(callback, 1000 / 24);
+	      };
+})();
+
+/*
+ * end of requestAnimFrame stuff
+ */
+
+for (n = 0; n < max_chans; n++) {
+	ringV[n] = new Array(ring_size);
+	ringA[n] = new Array(ring_size);
+	ringW[n] = new Array(ring_size);
+}
+
+for (n = 0; n < 1; n++) {
+	canvas[n] = document.getElementById('canvas0');
+	canvas[n].height = ylen + x_axis_height + caliper_headroom;
+	canvas[n].width = xlen + y_axis_width;
+
+//	document.getElementById('pane0').appendChild(canvas[n]);
+}
+
+hookEvent(document.getElementById("canvas0"), "mousewheel", event_wheel);
+hookEvent(document.getElementById("canvas0"), "mousedown", event_drag_start);
+hookEvent(document.getElementById("canvas0"), "mousemove", event_drag);
+hookEvent(document.getElementById("canvas0"), "mouseup", event_drag_end);
+
+offsetX = offsetY = 0;
+element = canvas;
+if (element.offsetParent) {
+do {
+  offsetX += element.offsetLeft;
+  offsetY += element.offsetTop;
+} while ((element = element.offsetParent));
+}
+
+
+
+grayOut(true,{'zindex':'499'});
+conn_retry();
+
+var _ctr = 0;
+(function animloop(){
+	requestAnimFrame(animloop);
+	show();
+})();
+
+function cancelEvent(e)
+{
+  e = e ? e : window.event;
+  if(e.stopPropagation)
+    e.stopPropagation();
+  if(e.preventDefault)
+    e.preventDefault();
+  e.cancelBubble = true;
+  e.cancel = true;
+  e.returnValue = false;
+  return false;
+}
+
+function hookEvent(element, eventName, callback)
+{
+  if(typeof(element) == "string")
+    element = document.getElementById(element);
+  if(element == null)
+    return;
+  if(element.addEventListener)
+  {
+    if(eventName == 'mousewheel')
+      element.addEventListener('DOMMouseScroll', callback, true);  
+    element.addEventListener(eventName, callback, false);
+  }
+  else if(element.attachEvent)
+    element.attachEvent("on" + eventName, callback);
+}
+
+function unhookEvent(element, eventName, callback)
+{
+  if(typeof(element) == "string")
+    element = document.getElementById(element);
+  if(element == null)
+    return;
+  if(element.removeEventListener)
+  {
+    if(eventName == 'mousewheel')
+      element.removeEventListener('DOMMouseScroll', callback, true);  
+    element.removeEventListener(eventName, callback, false);
+  }
+  else if(element.detachEvent)
+    element.detachEvent("on" + eventName, callback);
+}
+
+
+/*
+html5slider - a JS implementation of <input type=range> for Firefox 4 and up
+https://github.com/fryn/html5slider
+
+Copyright (c) 2010-2011 Frank Yan, <http://frankyan.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+(function() {
+
+// test for native support
+var test = document.createElement('input');
+try {
+  test.type = 'range';
+  if (test.type == 'range')
+    return;
+} catch (e) {
+  return;
+}
+
+// test for required property support
+if (!document.mozSetImageElement || !('MozAppearance' in test.style))
+  return;
+
+var scale;
+var isMac = navigator.platform == 'MacIntel';
+var thumb = {
+  radius: isMac ? 9 : 6,
+  width: isMac ? 22 : 12,
+  height: isMac ? 16 : 20
+};
+var track = '-moz-linear-gradient(top, transparent ' + (isMac ?
+  '6px, #999 6px, #999 7px, #ccc 9px, #bbb 11px, #bbb 12px, transparent 12px' :
+  '9px, #999 9px, #bbb 10px, #fff 11px, transparent 11px') +
+  ', transparent)';
+var styles = {
+  'min-width': thumb.width + 'px',
+  'min-height': thumb.height + 'px',
+  'max-height': thumb.height + 'px',
+  padding: 0,
+  border: 0,
+  'border-radius': 0,
+  cursor: 'default',
+  'text-indent': '-999999px' // -moz-user-select: none; breaks mouse capture
+};
+var onChange = document.createEvent('HTMLEvents');
+onChange.initEvent('change', true, false);
+
+if (document.readyState == 'loading')
+  document.addEventListener('DOMContentLoaded', initialize, true);
+else
+  initialize();
+
+function initialize() {
+  // create initial sliders
+  Array.forEach(document.querySelectorAll('input[type=range]'), transform);
+  // create sliders on-the-fly
+  document.addEventListener('DOMNodeInserted', onNodeInserted, true);
+}
+
+function onNodeInserted(e) {
+  check(e.target);
+  if (e.target.querySelectorAll)
+    Array.forEach(e.target.querySelectorAll('input'), check);
+}
+
+function check(input, async) {
+  if (input.localName != 'input' || input.type == 'range');
+  else if (input.getAttribute('type') == 'range')
+    transform(input);
+  else if (!async)
+    setTimeout(check, 0, input, true);
+}
+
+function transform(slider) {
+
+  var isValueSet, areAttrsSet, isChanged, isClick, prevValue, rawValue, prevX;
+  var min, max, step, range, value = slider.value;
+
+  // lazily create shared slider affordance
+  if (!scale) {
+    scale = document.body.appendChild(document.createElement('hr'));
+    style(scale, {
+      '-moz-appearance': isMac ? 'scale-horizontal' : 'scalethumb-horizontal',
+      display: 'block',
+      visibility: 'visible',
+      opacity: 1,
+      position: 'fixed',
+      top: '-999999px'
+    });
+    document.mozSetImageElement('__sliderthumb__', scale);
+  }
+
+  // reimplement value and type properties
+  var getValue = function() { return '' + value; };
+  var setValue = function setValue(val) {
+    value = '' + val;
+    isValueSet = true;
+    draw();
+    delete slider.value;
+    slider.value = value;
+    slider.__defineGetter__('value', getValue);
+    slider.__defineSetter__('value', setValue);
+  };
+  slider.__defineGetter__('value', getValue);
+  slider.__defineSetter__('value', setValue);
+  slider.__defineGetter__('type', function() { return 'range'; });
+
+  // sync properties with attributes
+  ['min', 'max', 'step'].forEach(function(prop) {
+    if (slider.hasAttribute(prop))
+      areAttrsSet = true;
+    slider.__defineGetter__(prop, function() {
+      return this.hasAttribute(prop) ? this.getAttribute(prop) : '';
+    });
+    slider.__defineSetter__(prop, function(val) {
+      val === null ? this.removeAttribute(prop) : this.setAttribute(prop, val);
+    });
+  });
+
+  // initialize slider
+  slider.readOnly = true;
+  style(slider, styles);
+  update();
+
+  slider.addEventListener('DOMAttrModified', function(e) {
+    // note that value attribute only sets initial value
+    if (e.attrName == 'value' && !isValueSet) {
+      value = e.newValue;
+      draw();
+    }
+    else if (~['min', 'max', 'step'].indexOf(e.attrName)) {
+      update();
+      areAttrsSet = true;
+    }
+  }, true);
+
+  slider.addEventListener('mousedown', onDragStart, true);
+  slider.addEventListener('keydown', onKeyDown, true);
+  slider.addEventListener('focus', onFocus, true);
+  slider.addEventListener('blur', onBlur, true);
+
+  function onDragStart(e) {
+    isClick = true;
+    setTimeout(function() { isClick = false; }, 0);
+    if (e.button || !range)
+      return;
+    var width = parseFloat(getComputedStyle(this, 0).width);
+    var multiplier = (width - thumb.width) / range;
+    if (!multiplier)
+      return;
+    // distance between click and center of thumb
+    var dev = e.clientX - this.getBoundingClientRect().left - thumb.width / 2 -
+              (value - min) * multiplier;
+    // if click was not on thumb, move thumb to click location
+    if (Math.abs(dev) > thumb.radius) {
+      isChanged = true;
+      this.value -= -dev / multiplier;
+    }
+    rawValue = value;
+    prevX = e.clientX;
+    this.addEventListener('mousemove', onDrag, true);
+    this.addEventListener('mouseup', onDragEnd, true);
+  }
+
+  function onDrag(e) {
+    var width = parseFloat(getComputedStyle(this, 0).width);
+    var multiplier = (width - thumb.width) / range;
+    if (!multiplier)
+      return;
+    rawValue += (e.clientX - prevX) / multiplier;
+    prevX = e.clientX;
+    isChanged = true;
+    this.value = rawValue;
+  }
+
+  function onDragEnd() {
+    this.removeEventListener('mousemove', onDrag, true);
+    this.removeEventListener('mouseup', onDragEnd, true);
+  }
+
+  function onKeyDown(e) {
+    if (e.keyCode > 36 && e.keyCode < 41) { // 37-40: left, up, right, down
+      onFocus.call(this);
+      isChanged = true;
+      this.value = value + (e.keyCode == 38 || e.keyCode == 39 ? step : -step);
+    }
+  }
+
+  function onFocus() {
+    if (!isClick)
+      this.style.boxShadow = !isMac ? '0 0 0 2px #fb0' :
+        '0 0 2px 1px -moz-mac-focusring, inset 0 0 1px -moz-mac-focusring';
+  }
+
+  function onBlur() {
+    this.style.boxShadow = '';
+  }
+
+  // determines whether value is valid number in attribute form
+  function isAttrNum(value) {
+    return !isNaN(value) && +value == parseFloat(value);
+  }
+
+  // validates min, max, and step attributes and redraws
+  function update() {
+    min = isAttrNum(slider.min) ? +slider.min : 0;
+    max = isAttrNum(slider.max) ? +slider.max : 100;
+    if (max < min)
+      max = min > 100 ? min : 100;
+    step = isAttrNum(slider.step) && slider.step > 0 ? +slider.step : 1;
+    range = max - min;
+    draw(true);
+  }
+
+  // recalculates value property
+  function calc() {
+    if (!isValueSet && !areAttrsSet)
+      value = slider.getAttribute('value');
+    if (!isAttrNum(value))
+      value = (min + max) / 2;;
+    // snap to step intervals (WebKit sometimes does not - bug?)
+    value = Math.round((value - min) / step) * step + min;
+    if (value < min)
+      value = min;
+    else if (value > max)
+      value = min + ~~(range / step) * step;
+  }
+
+  // renders slider using CSS background ;)
+  function draw(attrsModified) {
+    calc();
+    if (isChanged && value != prevValue)
+      slider.dispatchEvent(onChange);
+    isChanged = false;
+    if (!attrsModified && value == prevValue)
+      return;
+    prevValue = value;
+    var position = range ? (value - min) / range * 100 : 0;
+    var bg = '-moz-element(#__sliderthumb__) ' + position + '% no-repeat, ';
+    style(slider, { background: bg + track });
+  }
+
+}
+
+function style(element, styles) {
+  for (var prop in styles)
+    element.style.setProperty(prop, styles[prop], 'important');
+}
+
+})();
+
+</script>
+</article>
+</body>
+</html>
+
