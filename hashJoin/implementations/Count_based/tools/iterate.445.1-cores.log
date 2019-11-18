@@ -1,0 +1,204 @@
+script -a -f -c './find-max-rate.pl -c 1 --min 100 --max 2000 -w 900 -W 900 -d 2700' iterate.445.1-cores.logScript started on 2019-11-07 18:11:12+0100
+# Generating input data...
+# Using parameters:
+#   - num_tuples_R: 2835000; num_tuples_S: 2835000
+#   - rate_R: 1050; rate_S: 1050
+#   - window_size_R: 900; window_size_S: 900
+# Data generation done.
+# Use Hash Join
+# Setting up result collector...
+# Collector setup done.
+#
+# Start Stream
+0
+0
+0 result tuples retrieved in 0.750 sec (  0.00 tuples/sec)
+0 result tuples retrieved in 1.000 sec (  0.00 tuples/sec)
+0 result tuples retrieved in 1.000 sec (  0.00 tuples/sec)
+0 result tuples retrieved in 1.000 sec (  0.00 tuples/sec)
+0 result tuples retrieved in 1.000 sec (  0.00 tuples/sec)
+7 result tuples retrieved in 1.000 sec (  7.00 tuples/sec)
+7 result tuples retrieved in 1.000 sec (  7.00 tuples/sec)
+28 result tuples retrieved in 1.000 sec ( 28.00 tuples/sec)
+35 result tuples retrieved in 1.000 sec ( 35.00 tuples/sec)
+28 result tuples retrieved in 1.000 sec ( 28.00 tuples/sec)
+49 result tuples retrieved in 1.000 sec ( 49.00 tuples/sec)
+56 result tuples retrieved in 1.000 sec ( 56.00 tuples/sec)
+56 result tuples retrieved in 1.000 sec ( 56.00 tuples/sec)
+63 result tuples retrieved in 1.000 sec ( 63.00 tuples/sec)
+77 result tuples retrieved in 1.000 sec ( 77.00 tuples/sec)
+77 result tuples retrieved in 1.000 sec ( 77.00 tuples/sec)
+91 result tuples retrieved in 1.000 sec ( 91.00 tuples/sec)
+98 result tuples retrieved in 1.000 sec ( 98.00 tuples/sec)
+105 result tuples retrieved in 1.000 sec (105.00 tuples/sec)
+112 result tuples retrieved in 1.000 sec (112.00 tuples/sec)
+112 result tuples retrieved in 1.000 sec (112.00 tuples/sec)
+126 result tuples retrieved in 1.000 sec (126.00 tuples/sec)
+154 result tuples retrieved in 1.000 sec (154.00 tuples/sec)
+154 result tuples retrieved in 1.000 sec (154.00 tuples/sec)
+147 result tuples retrieved in 1.000 sec (147.01 tuples/sec)
+133 result tuples retrieved in 1.000 sec (132.99 tuples/sec)
+147 result tuples retrieved in 1.000 sec (147.00 tuples/sec)
+154 result tuples retrieved in 1.000 sec (154.01 tuples/sec)
+168 result tuples retrieved in 1.000 sec (167.99 tuples/sec)
+147 result tuples retrieved in 1.000 sec (147.01 tuples/sec)
+161 result tuples retrieved in 1.000 sec (160.99 tuples/sec)
+147 result tuples retrieved in 1.000 sec (147.00 tuples/sec)
+168 result tuples retrieved in 1.000 sec (168.00 tuples/sec)
+154 result tuples retrieved in 1.000 sec (154.00 tuples/sec)
+168 result tuples retrieved in 1.000 sec (168.01 tuples/sec)
+161 result tuples retrieved in 1.000 sec (160.99 tuples/sec)
+119 result tuples retrieved in 1.000 sec (119.01 tuples/sec)
+161 result tuples retrieved in 1.000 sec (160.99 tuples/sec)
+175 result tuples retrieved in 1.000 sec (175.00 tuples/sec)
+168 result tuples retrieved in 1.000 sec (168.00 tuples/sec)
+Cannot send S tuple. FIFO queue full.
+Run with rate 1050 failed.
+# Generating input data...
+# Using parameters:
+#   - num_tuples_R: 1552500; num_tuples_S: 1552500
+#   - rate_R: 575; rate_S: 575
+#   - window_size_R: 900; window_size_S: 900
+# Data generation done.
+# Use Hash Join
+# Setting up result collector...
+# Collector setup done.
+#
+# Start Stream
+0
+0
+0 result tuples retrieved in 0.050 sec (  0.00 tuples/sec)
+0 result tuples retrieved in 1.000 sec (  0.00 tuples/sec)
+0 result tuples retrieved in 1.000 sec (  0.00 tuples/sec)
+0 result tuples retrieved in 1.000 sec (  0.00 tuples/sec)
+0 result tuples retrieved in 1.000 sec (  0.00 tuples/sec)
+0 result tuples retrieved in 1.000 sec (  0.00 tuples/sec)
+0 result tuples retrieved in 1.000 sec (  0.00 tuples/sec)
+7 result tuples retrieved in 1.000 sec (  7.00 tuples/sec)
+14 result tuples retrieved in 1.000 sec ( 14.00 tuples/sec)
+14 result tuples retrieved in 1.000 sec ( 14.00 tuples/sec)
+^CRun with rate 575 failed.
+# Generating input data...
+# Using parameters:
+#   - num_tuples_R: 911250; num_tuples_S: 911250
+#   - rate_R: 337; rate_S: 337
+#   - window_size_R: 900; window_size_S: 900
+# Data generation done.
+# Use Hash Join
+# Setting up result collector...
+# Collector setup done.
+#
+# Start Stream
+0
+0
+0 result tuples retrieved in 0.400 sec (  0.00 tuples/sec)
+^C^CRun with rate 337.5 failed.
+^CRun with rate 218.75 failed.
+# Generating input data...
+# Using parameters:
+#   - num_tuples_R: 430312; num_tuples_S: 430312
+#   - rate_R: 159; rate_S: 159
+#   - window_size_R: 900; window_size_S: 900
+# Data generation done.
+# Use Hash Join
+# Setting up result collector...
+# Collector setup done.
+#
+# Start Stream
+0
+0
+0 result tuples retrieved in 0.850 sec (  0.00 tuples/sec)
+^CRun with rate 159.375 failed.
+# Generating input data...
+# Using parameters:
+#   - num_tuples_R: 350156; num_tuples_S: 350156
+#   - rate_R: 129; rate_S: 129
+#   - window_size_R: 900; window_size_S: 900
+# Data generation done.
+# Use Hash Join
+# Setting up result collector...
+# Collector setup done.
+#
+# Start Stream
+0
+0
+0 result tuples retrieved in 0.100 sec (  0.00 tuples/sec)
+^CRun with rate 129.6875 failed.
+# Generating input data...
+# Using parameters:
+#   - num_tuples_R: 310078; num_tuples_S: 310078
+#   - rate_R: 114; rate_S: 114
+#   - window_size_R: 900; window_size_S: 900
+# Data generation done.
+# Use Hash Join
+# Setting up result collector...
+# Collector setup done.
+#
+# Start Stream
+0
+0
+0 result tuples retrieved in 0.250 sec (  0.00 tuples/sec)
+^CRun with rate 114.84375 failed.
+# Generating input data...
+# Using parameters:
+#   - num_tuples_R: 290039; num_tuples_S: 290039
+#   - rate_R: 107; rate_S: 107
+#   - window_size_R: 900; window_size_S: 900
+# Data generation done.
+# Use Hash Join
+# Setting up result collector...
+# Collector setup done.
+#
+# Start Stream
+0
+0
+0 result tuples retrieved in 0.300 sec (  0.00 tuples/sec)
+^CRun with rate 107.421875 failed.
+# Generating input data...
+# Using parameters:
+#   - num_tuples_R: 280019; num_tuples_S: 280019
+#   - rate_R: 103; rate_S: 103
+#   - window_size_R: 900; window_size_S: 900
+# Data generation done.
+# Use Hash Join
+# Setting up result collector...
+# Collector setup done.
+#
+# Start Stream
+0
+0
+0 result tuples retrieved in 0.050 sec (  0.00 tuples/sec)
+^CRun with rate 103.7109375 failed.
+# Generating input data...
+# Using parameters:
+#   - num_tuples_R: 275009; num_tuples_S: 275009
+#   - rate_R: 101; rate_S: 101
+#   - window_size_R: 900; window_size_S: 900
+# Data generation done.
+# Use Hash Join
+# Setting up result collector...
+# Collector setup done.
+#
+# Start Stream
+0
+0
+0 result tuples retrieved in 0.100 sec (  0.00 tuples/sec)
+^CRun with rate 101.85546875 failed.
+# Generating input data...
+# Using parameters:
+#   - num_tuples_R: 272504; num_tuples_S: 272504
+#   - rate_R: 100; rate_S: 100
+#   - window_size_R: 900; window_size_S: 900
+# Data generation done.
+# Use Hash Join
+# Setting up result collector...
+# Collector setup done.
+#
+# Start Stream
+0
+0
+0 result tuples retrieved in 0.200 sec (  0.00 tuples/sec)
+^CRun with rate 100.927734375 failed.
+Rate is 100.4638671875.
+
+Script done on 2019-11-07 18:12:16+0100

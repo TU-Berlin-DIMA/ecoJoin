@@ -201,6 +201,8 @@ void CtrlChandler(int _) {
   exit(0);
 }
 
+
+/*
 int main(int argc, char *argv[]) {
   if (argc != 2) {
     printf("Usage: bench [window_size]");
@@ -210,11 +212,12 @@ int main(int argc, char *argv[]) {
   signal(SIGINT, CtrlChandler);
 
   // Input Buffer
-  const int buffersize = 100 * 100; //* 100;
+  const int buffersize = 100 * 100 * 100;
   tuple *records0;
-  cudaHostAlloc((void **)&records0, buffersize * sizeof(tuple), cudaHostAllocDefault);
+  CUDA_SAFE(cudaHostAlloc((void **)&records0, buffersize * sizeof(tuple), cudaHostAllocDefault));
   for (int i = 0; i < buffersize; i++) {
     records0[i].key = rand() % 10000 + 1;
+  std::cout << "Input buffer created\n";
     records0[i].value = rand() % 10000 + 1;
     records0[i].timestamp = 0;
     records0[i].stream = rand() % 2; // Stream1 or Stream2
@@ -233,3 +236,4 @@ int main(int argc, char *argv[]) {
 
   startStream(records0, buffersize);
 }
+*/
