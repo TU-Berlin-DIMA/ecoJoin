@@ -57,10 +57,10 @@ int main(int argc, char **argv) {
 	ctx->num_tuples_S = 1800000;
 	ctx->num_tuples_R = 1800000;
 	ctx->int_value_range   = 10000;
-        ctx->float_value_range = 10000;
+	ctx->float_value_range = 10000;
 
-	ctx->data_S_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH,0);
-	ctx->data_R_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH,0);
+	ctx->data_S_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH*3,0);
+	ctx->data_R_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH*3,0);
 	ctx->result_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH,0);
 
 
@@ -126,30 +126,28 @@ int main(int argc, char **argv) {
 	w_ctx->data_S_queue = ctx->data_S_queue;
 	w_ctx->data_R_queue = ctx->data_R_queue;
 	w_ctx->S.a = ctx->S.a;
-    	w_ctx->S.b = ctx->S.b;
-    	w_ctx->R.x = ctx->R.x;
-    	w_ctx->R.y = ctx->R.y;
+	w_ctx->S.b = ctx->S.b;
+	w_ctx->R.x = ctx->R.x;
+	w_ctx->R.y = ctx->R.y;
 	w_ctx->r_first = 0;
 	w_ctx->s_first = 0;
 	w_ctx->r_end = 0;
 	w_ctx->s_end = 0;
+	w_ctx->sleep_time= 0;
 
 	fprintf (ctx->outfile, "# Setting up result collector...\n");
 	int status = 0;
-        status = pthread_create (&collector, NULL, collect_results, ctx);
-        assert (status == 0);
-        fprintf (ctx->outfile, "# Collector setup done.\n");
-        printf ("#\n");
+	status = pthread_create (&collector, NULL, collect_results, ctx);
+	assert (status == 0);
+	fprintf (ctx->outfile, "# Collector setup done.\n");
+	printf ("#\n");
 
 	fprintf (ctx->outfile, "# Start Stream\n");
 	std::thread first (start_stream, ctx);
 	
 	// HASH TBL implementation
-	pthread_t worker;
-	status = pthread_create (&worker, NULL, &start_worker, w_ctx);
-	assert (status == 0);
-
-	//start_worker(w_ctx);
+	fprintf (ctx->outfile, "# Start Worker\n");
+	start_worker(w_ctx);
 	
 	//start_worker(ctx);
 	
@@ -202,53 +200,6 @@ send_new_S_tuple (master_ctx_t *ctx, unsigned int start_idx, unsigned int size)
     return ret;
 }
 
-static inline bool
-send_R_ack (master_ctx_t *ctx, unsigned int start_idx, unsigned int size)
-{
-    core2core_msg_t msg;
-    
-        msg.type = ack_R_msg;
-        msg.msg.ack_R = (ack_R_msg_t) { .start_idx = start_idx,
-                                     .size      = size } ;
-
-    bool ret = send (ctx->data_S_queue, &msg, sizeof (msg));
-
-    //LOG(ctx->logfile, "sent ACK R [%u:%u] to queue %p (%s)",
-    //        start_idx, size, ctx->data_S_queue,
-    //        ret ? "successful" : "FAILED");
-
-    if (!ret)
-    {
-        fprintf (stderr, "Cannot send R acknowledgement. FIFO queue full.\n");
-        exit (EXIT_FAILURE);
-    }
-
-    return ret;
-}
-
-static inline bool
-send_S_ack (master_ctx_t *ctx, unsigned int start_idx, unsigned int size)
-{
-    core2core_msg_t msg;
-        msg.type = ack_S_msg;
-        msg.msg.ack_S = (ack_S_msg_t) { .start_idx = start_idx,
-                                     .size      = size } ;
-
-    bool ret = send (ctx->data_R_queue, &msg, sizeof (msg));
-
-    //LOG(ctx->logfile, "sent ACK S [%u:%u] to queue %p (%s)",
-    //        start_idx, size, ctx->data_R_queue,
-    //        ret ? "successful" : "FAILED");
-
-    if (!ret)
-    {
-        fprintf (stderr, "Cannot send S acknowledgement. FIFO queue full.\n");
-        exit (EXIT_FAILURE);
-    }
-
-    return ret;
-}
-
 
 /**
  * Handles the stream queues
@@ -274,11 +225,13 @@ static void start_stream (master_ctx_t *ctx)
 			 "Something went wrong with the real time interface.\n");
 		 fprintf (stderr, "A call to hj_gettime() failed.\n");
 		 exit (EXIT_FAILURE);
-        }
+	}
 
-        /* add a few seconds delay to play safe */
-        t_start.tv_sec += 5;
-        t_offset = t_start.tv_sec;
+	/* add a few seconds delay to play safe */
+	t_start.tv_sec += 5;
+	t_offset = t_start.tv_sec;
+	int t_last_sec = 0;
+	int t_last_nsec = 0;
 
 	/* current tuple marker */
 	unsigned r = 0;
@@ -304,11 +257,10 @@ static void start_stream (master_ctx_t *ctx)
 
 		t_real = (struct timespec) { .tv_sec  = t_rel.tv_sec + t_offset,
 			.tv_nsec = t_rel.tv_nsec };
-		
-
+	
 		/* Print time */
 		/*const uint TIME_FMT = strlen("2012-12-31 12:59:59.123456789") + 1;
-    		char timestr[TIME_FMT];
+		char timestr[TIME_FMT];
 
 		struct timeval t;
 
@@ -320,122 +272,42 @@ static void start_stream (master_ctx_t *ctx)
 
 		hj_nanosleep (&t_real);
 
-		while (r_end < r
-			&& (ctx->R.t[r_end].tv_sec*1000000000L + ctx->R.t[r_end].tv_nsec
-			    + ctx->window_size_R * 1000000000L)
-			    < (t_rel.tv_sec * 1000000000L + t_rel.tv_nsec))
-		{
-		    /*
-		     * Processing tuples in chunks can cause problems here.
-		     *
-		     * Situation:
-		     *
-		     *  1. An S tuple is logically sent, but only queued up in
-		     *     the next S chunk (that is, it will not actually be
-		     *     sent to a worker).
-		     *
-		     *  2. It is time to expire some old tuples, so we send an
-		     *     acknowledgement here.
-		     *
-		     *  3. When the S chunk is sent to the worker now, it will
-		     *     not see tuples that were expired with the above
-		     *     acknowledgement.
-		     *
-		     * We avoid this by explicitly looking at not-yet-sent tuples
-		     * before we send out the acknowledgement.
-		     */
-		    for (unsigned int r_ = r_end; r_ < r_end + TUPLES_PER_CHUNK_R; r_++)
-		    {
-			for (unsigned int s_ = s_last_sent; s_ < s; s_++)
-			{
-			    const a_t a = ctx->S.a[s_] - ctx->R.x[r_];
-			    const b_t b = ctx->S.b[s_] - ctx->R.y[r_];
-			    if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
-				emit_result (ctx, r_, s_);
-			}
-		    }
-
-		    if (send_R_ack (ctx, r_end, TUPLES_PER_CHUNK_R))
-			r_end += TUPLES_PER_CHUNK_R;
-		    else
-			break;
+		if (next_is_R){
+			send_new_R_tuple (ctx, r, TUPLES_PER_CHUNK_R);
+			//r++;
+			r += TUPLES_PER_CHUNK_R;
+		} else {
+			send_new_S_tuple (ctx, s, TUPLES_PER_CHUNK_S);
+			//s++;
+			s += TUPLES_PER_CHUNK_S;
 		}
 		
-		/* let old tuples expire; now the S tuples */
-		while (s_end < s
-			&& (ctx->S.t[s_end].tv_sec*1000000000L + ctx->S.t[s_end].tv_nsec
-			    + ctx->window_size_S * 1000000000L)
-			    < (t_rel.tv_sec * 1000000000L + t_rel.tv_nsec))
-		{
-		    /* see above */
-		    for (unsigned int s_ = s_end; s_ < s_end + TUPLES_PER_CHUNK_S; s_++)
-		    {
+		/*if (!next_is_R){
+			int s_ = s;
 			for (unsigned int r_ = r_last_sent; r_ < r; r_++)
 			{
-			    const a_t a = ctx->S.a[s_] - ctx->R.x[r_];
-			    const b_t b = ctx->S.b[s_] - ctx->R.y[r_];
-			    if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
-				emit_result (ctx, r_, s_);
+				const a_t a = ctx->S.a[s_] - ctx->R.x[r_];
+				const b_t b = ctx->S.b[s_] - ctx->R.y[r_];
+				if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
+					emit_result (ctx, r_, s_);
 			}
-		    }
-
-
-		    if (send_S_ack (ctx, s_end, TUPLES_PER_CHUNK_S))
-			s_end += TUPLES_PER_CHUNK_S;
-		    else
-			break;
+			s++;
+			s_last_sent = s;
 		}
 
 
-		// Add Tuple to the Queue
-		if (next_is_R) {
-			for (int s_ = s_end-1;
-				    s_ >= 0
-				    && (ctx->S.t[s_].tv_sec * 1000000000L + ctx->S.t[s_].tv_nsec
-					+ ctx->window_size_S * 1000000000L)
-				       >= (ctx->R.t[r].tv_sec * 1000000000L
-					   + ctx->R.t[r].tv_nsec);
-				    s_--)
-              		{
-				const a_t a = ctx->S.a[s_] - ctx->R.x[r];
-				const b_t b = ctx->S.b[s_] - ctx->R.y[r];
-				if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
-				    emit_result (ctx, r, s_);
-			}
-
-			r++;
-		        
-			if ((r - r_last_sent) == TUPLES_PER_CHUNK_R) 
+		if (next_is_R){
+			int r_ = r;
+			for (unsigned int s_ = s_last_sent; s_ < s; s_++)
 			{
-				send_new_R_tuple(ctx, r_last_sent, TUPLES_PER_CHUNK_R);		
-				r_last_sent = r;
-				//r_end += TUPLES_PER_CHUNK_R;
-			}
-		} else {
-			for (int r_ = r_end-1;
-			    r_ >= 0
-			    && (ctx->R.t[r_].tv_sec * 1000000000L + ctx->R.t[r_].tv_nsec
-				+ ctx->window_size_R * 1000000000L)
-			       >= (ctx->S.t[s].tv_sec * 1000000000L
-				   + ctx->S.t[s].tv_nsec);
-			    r_--)
-   			{
-				const a_t a = ctx->S.a[s] - ctx->R.x[r_];
-				const b_t b = ctx->S.b[s] - ctx->R.y[r_];
+				const a_t a = ctx->S.a[s_] - ctx->R.x[r_];
+				const b_t b = ctx->S.b[s_] - ctx->R.y[r_];
 				if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
-			    emit_result (ctx, r_, s);
-		        }
-
-		        s++;
-			
-			/* only actually send tuple when the chunk is full */
-		        if ((s - s_last_sent) == TUPLES_PER_CHUNK_S)
-		        {
-				send_new_S_tuple(ctx, s_last_sent, TUPLES_PER_CHUNK_S);
-				s_last_sent = s;
-				//s_end += TUPLES_PER_CHUNK_S;
-		        }
-		}
+					emit_result (ctx, r_, s_);
+			}
+			r++;
+			r_last_sent = r;
+		}*/
 	}
 	printf("End of stream\n");
 	exit(0);
@@ -514,7 +386,21 @@ collect_results (void *arg)
 							ctx->S.d[msg[j].s] ? "true" : "false"
 							);
 				}
-
+				/*
+				printf (	"%4lu.%09lu | %8u | %8.2f | %20s || "
+							"%4lu.%09lu | %8u | %8.2f | %10.2f | %5s || "
+							"\n",
+							ctx->R.t[msg[j].r].tv_sec,
+							ctx->R.t[msg[j].r].tv_nsec,
+							ctx->R.x[msg[j].r], ctx->R.y[msg[j].r],
+							ctx->R.z[msg[j].r],
+							ctx->S.t[msg[j].s].tv_sec,
+							ctx->S.t[msg[j].s].tv_nsec,
+							ctx->S.a[msg[j].s], ctx->S.b[msg[j].s],
+							ctx->S.c[msg[j].s],
+							ctx->S.d[msg[j].s] ? "true" : "false"
+							);
+							*/
 				n_now++;
 			}
 		}
@@ -547,7 +433,7 @@ collect_results (void *arg)
 	return NULL;
 }
 
-static void
+/*static void
 emit_result (master_ctx_t *ctx, unsigned int r, unsigned int s)
 {
     //LOG(ctx->logfile, "result: r = %u, s = %u", r, s);
@@ -561,12 +447,12 @@ emit_result (master_ctx_t *ctx, unsigned int r, unsigned int s)
 
     if (ctx->partial_result_msg.pos == RESULTS_PER_MESSAGE)
         flush_result (ctx);
-}
+}*/
 
 /**
  * Flush queue to result collector; see emit_result().
  */
-static inline void
+/*static inline void
 flush_result (master_ctx_t *ctx)
 {
     if (ctx->partial_result_msg.pos != 0)
@@ -583,7 +469,7 @@ flush_result (master_ctx_t *ctx)
     {
         //LOG(ctx->logfile, "flushing requested, but nothing to flush");
     }
-}
+}*/
 
 /*
  * Dummy woker

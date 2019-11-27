@@ -19,19 +19,19 @@
 
 
 #include <time.h>
+#include <sys/time.h>
 
 #define hj_gettime(tm) \
     clock_gettime (CLOCK_REALTIME, (tm))
 
-#define hj_nanosleep(ts) \
-    clock_nanosleep (CLOCK_REALTIME, TIMER_ABSTIME, (ts), NULL)
+//#define hj_nanosleep(ts) \
+//    clock_nanosleep (CLOCK_REALTIME, TIMER_ABSTIME, (ts), NULL)
 
 
-#include <sys/time.h>
 
 //int hj_gettime (struct timespec *ts);
 
-//void hj_nanosleep (struct timespec *ts);
+void hj_nanosleep (struct timespec *ts);
 
 int timespec2str(char *buf, unsigned int len, struct timespec *ts);
 

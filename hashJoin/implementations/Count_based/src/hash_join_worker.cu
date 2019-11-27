@@ -5,6 +5,8 @@
 
 #include "assert.h"
 #include <iostream>
+#include <chrono>
+#include <thread>
 
 #include "data.h"
 #include "master.h"
@@ -45,9 +47,10 @@ void *start_worker(void *ctx){
 		//expire_outdated_tuples (ctx);
 
 		/* sleep for */
-		std::chrono::seconds sec(w_ctx->sleep_time);
-		std::this_thread::sleep_for(sec);
-    	}
+		//std::chrono::seconds sec(w_ctx->sleep_time);
+		std::chrono::milliseconds sec(450);
+		//std::this_thread::sleep_for(sec);
+    }
 	return;
 }
 
@@ -61,7 +64,6 @@ void process_s (worker_ctx_t *w_ctx){
 		    s < msg.msg.chunk_S.start_idx +  TUPLES_PER_CHUNK_S;
 		    s++)
 		{
-			
 			const a_t a = w_ctx->S.a[s] - w_ctx->R.x[r];
 			const b_t b = w_ctx->S.b[s] - w_ctx->R.y[r];
 			if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
@@ -87,14 +89,12 @@ void process_r (worker_ctx_t *w_ctx){
 		}
 	}
 	w_ctx->r_end += TUPLES_PER_CHUNK_R;
+	
 }
 
 static inline void
 emit_result (worker_ctx_t *ctx, unsigned int r, unsigned int s)
 {
-    //LOG(ctx->log, "result: r = %u, s = %u", r, s);
-
-    //printf("Flush result\n");
     assert (ctx->partial_result_msg.pos < RESULTS_PER_MESSAGE);
 
     ctx->partial_result_msg.msg[ctx->partial_result_msg.pos]
@@ -112,7 +112,6 @@ flush_result (worker_ctx_t *ctx)
     if (ctx->partial_result_msg.pos != 0)
     {
 
-	//printf("Flush result\n");
         if (! send (ctx->result_queue, &ctx->partial_result_msg.msg,
                     ctx->partial_result_msg.pos * sizeof (result_t)))
         {

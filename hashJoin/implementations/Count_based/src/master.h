@@ -71,9 +71,9 @@ struct master_ctx_t {
 
 
 	//struct {
-        //   unsigned int   pos;   /**< number of tuples already in the message */
-        //   result_msg_t   msg;   /**< the partial message itself */
-        //} partial_result_msg;
+    //       unsigned int   pos;   /**< number of tuples already in the message */
+    //       result_msg_t   msg;   /**< the partial message itself */
+    //} partial_result_msg;
 };
 typedef struct master_ctx_t master_ctx_t;
 

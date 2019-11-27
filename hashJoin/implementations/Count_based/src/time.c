@@ -30,15 +30,14 @@
     return 0;
 }*/
 
-/*void hj_nanosleep (timespec *ts)
+void hj_nanosleep (timespec *ts)
 {
     struct timeval t;
-
     do {
         gettimeofday (&t, NULL);
     } while (t.tv_sec * 1000000000 + t.tv_usec * 1000
             < ts->tv_sec * 1000000000 + ts->tv_nsec);
-}*/
+}
 
 //#endif
 
