@@ -5,6 +5,9 @@
 
 #include "ringbuffer.h"
 
+enum processing_mode_e{cpu_mode, gpu_mode};
+
+
 struct master_ctx_t {
 
 	/** This queue handles the imput data of the R stream **/
@@ -69,6 +72,10 @@ struct master_ctx_t {
 		d_t             *d;
 	} S;
 
+    /**
+     * whether the join is processed on the cpu or gpu
+     */
+    processing_mode_e processing_mode;
 
 	//struct {
     //       unsigned int   pos;   /**< number of tuples already in the message */

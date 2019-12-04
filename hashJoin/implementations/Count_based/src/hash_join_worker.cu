@@ -1,5 +1,3 @@
-
-
 #include "config.h"
 #include "parameter.h"
 
@@ -20,9 +18,12 @@ static inline void emit_result (worker_ctx_t *ctx, unsigned int r,
 static inline void flush_result (worker_ctx_t *ctx);	
 void process_s (worker_ctx_t *w_ctx);
 void process_r (worker_ctx_t *w_ctx);
+void process_s_cpu (worker_ctx_t *w_ctx);
+void process_r_cpu (worker_ctx_t *w_ctx);
+//void expire_outdated_tuples (worker_ctx_t *w_ctx);
 
 /*
- * Dummy woker
+ * woker
  */
 void *start_worker(void *ctx){
 	worker_ctx_t *w_ctx = (worker_ctx_t *) ctx;
@@ -44,18 +45,27 @@ void *start_worker(void *ctx){
 		    process_s (w_ctx);
 
 		/* check for tuple expiration */
-		//expire_outdated_tuples (ctx);
+		//expire_outdated_tuples (w_ctx);
 
 		/* sleep for */
 		//std::chrono::seconds sec(w_ctx->sleep_time);
-		std::chrono::milliseconds sec(450);
-		//std::this_thread::sleep_for(sec);
-    }
+	}
 	return;
 }
 
-
 void process_s (worker_ctx_t *w_ctx){
+	if (w_ctx->processing_mode == cpu_mode){
+		process_s_cpu(w_ctx);
+	}
+}
+
+void process_r (worker_ctx_t *w_ctx){
+	if (w_ctx->processing_mode == cpu_mode){
+		process_r_cpu(w_ctx);
+	}
+}
+
+void process_s_cpu (worker_ctx_t *w_ctx){
 	core2core_msg_t msg;
 	receive(w_ctx->data_S_queue, &msg);
 	for (unsigned int r = w_ctx->r_first; r < w_ctx->r_end; r++)
@@ -73,7 +83,7 @@ void process_s (worker_ctx_t *w_ctx){
 	w_ctx->s_end += TUPLES_PER_CHUNK_S;
 }
 
-void process_r (worker_ctx_t *w_ctx){
+void process_r_cpu (worker_ctx_t *w_ctx){
 	core2core_msg_t msg;
 	receive(w_ctx->data_R_queue, &msg);
 	for (unsigned int s = w_ctx->s_first; s < w_ctx->s_end; s++)
@@ -127,26 +137,21 @@ flush_result (worker_ctx_t *ctx)
     }
 }
 
-/*void
-expire_outdated_tuples (worker_ctx_t *ctx){
+/*
+void
+expire_outdated_tuples (worker_ctx_t *w_ctx){
     struct timespec t_rel;
-    if (next_is_R)
-	t_rel = ctx->R.t[r];
-    else
-   	t_rel = ctx->S.t[s];
 
-    while (ctx->r_end < r
-         && (ctx->R.t[r_end].tv_sec*1000000000L + ctx->R.t[r_end].tv_nsec
-         + ctx->window_size_R * 1000000000L)
-         < (t_rel.tv_sec * 1000000000L + t_rel.tv_nsec))
-    {
-         ctx->r_end += TUPLES_PER_CHUNK_R;
+    t_rel = w_ctx->S.t[s_first];
+    while (w_ctx->R.t[r_end].tv_sec*1000000000L + w_ctx->R.t[r_end].tv_nsec
+         + w_ctx->window_size_R * 1000000000L) < (t_rel.tv_sec * 1000000000L + t_rel.tv_nsec){
+	 w_ctx->r_end -= 1;
     }
-    while (ctx->s_end < s
-         && (ctx->S.t[r_end].tv_sec*1000000000L + ctx->S.t[r_end].tv_nsec
-         + ctx->window_size_S * 1000000000L)
-         < (t_rel.tv_sec * 1000000000L + t_rel.tv_nsec))
-    {
-         ctx->s_end += TUPLES_PER_CHUNK_S;
+
+    t_rel = w_ctx->R.t[r_first];
+    while (w_ctx->S.t[r_end].tv_sec*1000000000L + w_ctx->S.t[r_end].tv_nsec
+         + w_ctx->window_size_S * 1000000000L) < (t_rel.tv_sec * 1000000000L + t_rel.tv_nsec){
+	 w_ctx->s_end -= 1;
     }
-}*/
+}
+*/

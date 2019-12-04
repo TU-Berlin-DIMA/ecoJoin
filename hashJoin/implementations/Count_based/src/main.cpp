@@ -40,6 +40,7 @@ static void usage(){
 	printf ("  -R RATE  tuple rate for stream S (in tuples/sec)\n");
 	printf ("  -w SIZE  window size for stream R (in seconds)\n");
 	printf ("  -W SIZE  window size for stream S (in seconds)\n");
+	printf ("  -p [cpu, gpu]  processing mode (cpu or gpu)\n");
 }
 
 int main(int argc, char **argv) {
@@ -58,6 +59,7 @@ int main(int argc, char **argv) {
 	ctx->num_tuples_R = 1800000;
 	ctx->int_value_range   = 10000;
 	ctx->float_value_range = 10000;
+	ctx->processing_mode = cpu_mode;
 
 	ctx->data_S_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH*3,0);
 	ctx->data_R_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH*3,0);
@@ -101,7 +103,14 @@ int main(int argc, char **argv) {
 			case 'W':
 				ctx->window_size_S = strtol (optarg, NULL, 10);
 				break;
-
+			case 'p':
+				if (strncmp(optarg,"cpu",3))
+					ctx->processing_mode = cpu_mode;
+				else if (strncmp(optarg,"gpu",3))
+					ctx->processing_mode = gpu_mode;
+				else
+					ctx->processing_mode = cpu_mode;
+				break;
 			case 'h':
 			case '?':
 			default:
@@ -120,11 +129,16 @@ int main(int argc, char **argv) {
 	generate_data (ctx);
 	fprintf (ctx->outfile, "# Data generation done.\n");
 
-	printf("# Use Hash Join\n");
+	if (ctx->processing_mode == cpu_mode)
+		fprintf (ctx->outfile, "# Use CPU processing mode\n");
+	else if (ctx->processing_mode == gpu_mode)
+		fprintf (ctx->outfile, "# Use GPU processing mode\n");
+	
 	worker_ctx_t *w_ctx = (worker_ctx_t *) malloc (sizeof (*w_ctx));
 	w_ctx->result_queue = ctx->result_queue;
 	w_ctx->data_S_queue = ctx->data_S_queue;
 	w_ctx->data_R_queue = ctx->data_R_queue;
+	w_ctx->processing_mode = ctx->processing_mode;
 	w_ctx->S.a = ctx->S.a;
 	w_ctx->S.b = ctx->S.b;
 	w_ctx->R.x = ctx->R.x;
@@ -155,6 +169,7 @@ int main(int argc, char **argv) {
 
 	return EXIT_SUCCESS;
 }
+
 
 static inline bool
 send_new_R_tuple (master_ctx_t *ctx, unsigned int start_idx, unsigned int size)

@@ -32,12 +32,7 @@ struct worker_ctx_t {
 
     /**
      * Those pieces of R that we (need to) have locally for join
-     * execution.  "Locally" means local to this NUMA node; the
-     * first worker on each NUMA node that receives a chunk of
-     * data will physically copy it into local memory.
-     *
-     * Note that, thanks to column-wise storage, we only have to
-     * have the two join attributes local.
+     * execution.     
      */
     struct {
         x_t        *x;
@@ -47,14 +42,24 @@ struct worker_ctx_t {
     /**
      * Those pieces of S that we (need to) have locally for join
      * execution.
-     *
-     * @see #R
      */
     struct {
         a_t        *a;
         b_t        *b;
     } S;
+    
+    /**
+     * whether the join is processed on the cpu or gpu
+     * defined in master.h
+     */
+    processing_mode_e processing_mode;
 
+
+    /** window size for R (in sec) **/
+    unsigned window_size_R;
+
+    /** window size for S (in sec) **/
+    unsigned window_size_S;
 };
 
 void *start_worker(void *ctx);
