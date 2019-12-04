@@ -14,8 +14,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <cuda_runtime_api.h>
+#include <cuda.h>
 
 #include "master.h"
+#include "cuda_helper.h"
 
 /**
  * Generate (materialize) an input data stream; our main performance
@@ -44,29 +47,59 @@ generate_data (master_ctx_t *ctx)
 
     /* allocate memory */
 
-    /* FIXME: Consider NUMA here */
-    ctx->R.t = (timespec*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.t));
-    ctx->R.x = (x_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.x));
-    ctx->R.y = (y_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.y));
-    ctx->R.z = (z_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.z));
+    if (ctx->processing_mode == cpu_mode){
+	    /* FIXME: Consider NUMA here */
+	    ctx->R.t = (timespec*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.t));
+	    ctx->R.x = (x_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.x));
+	    ctx->R.y = (y_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.y));
+	    ctx->R.z = (z_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.z));
 
-    if (! (ctx->R.x && ctx->R.y && ctx->R.z))
-    {
-        fprintf (stderr, "memory allocation error\n");
-        exit (EXIT_FAILURE);
-    }
+	    if (! (ctx->R.x && ctx->R.y && ctx->R.z))
+	    {
+		fprintf (stderr, "memory allocation error\n");
+		exit (EXIT_FAILURE);
+	    }
 
-    /* FIXME: Consider NUMA here */
-    ctx->S.t = (timespec*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.t));
-    ctx->S.a = (a_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.a));
-    ctx->S.b = (b_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.b));
-    ctx->S.c = (c_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.c));
-    ctx->S.d = (d_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.d));
+	    /* FIXME: Consider NUMA here */
+	    ctx->S.t = (timespec*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.t));
+	    ctx->S.a = (a_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.a));
+	    ctx->S.b = (b_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.b));
+	    ctx->S.c = (c_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.c));
+	    ctx->S.d = (d_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.d));
 
-    if (! (ctx->S.a && ctx->S.b && ctx->S.c && ctx->S.d))
-    {
-        fprintf (stderr, "memory allocation error\n");
-        exit (EXIT_FAILURE);
+	    if (! (ctx->S.a && ctx->S.b && ctx->S.c && ctx->S.d))
+	    {
+		fprintf (stderr, "memory allocation error\n");
+		exit (EXIT_FAILURE);
+	    }
+    } else if (ctx->processing_mode == gpu_mode){
+	    unsigned *i;
+	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.t), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.t),0));
+	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.x), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.x),0));
+	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.y), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.y),0));
+	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.z), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.z),0));
+
+	    if (! (ctx->R.x && ctx->R.y && ctx->R.z))
+	    {
+		fprintf (stderr, "memory allocation error\n");
+		exit (EXIT_FAILURE);
+	    }
+
+	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.t), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.t),0));
+	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.a), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.a),0));
+	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.b), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.b),0));
+	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.c), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.c),0));
+	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.d), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.d),0));
+
+	    if (! (ctx->S.a && ctx->S.b && ctx->S.c && ctx->S.d))
+	    {
+		fprintf (stderr, "memory allocation error\n");
+		exit (EXIT_FAILURE);
+	    }
+
+    } else {
+	fprintf (stderr, "processing mode not found\n");
+	exit (EXIT_FAILURE);
     }
 
     /* generate data for R */

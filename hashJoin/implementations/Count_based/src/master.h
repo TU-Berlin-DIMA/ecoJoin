@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "ringbuffer.h"
+#include "data.h"
 
 enum processing_mode_e{cpu_mode, gpu_mode};
 
