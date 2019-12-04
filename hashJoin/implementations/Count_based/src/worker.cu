@@ -54,7 +54,7 @@ void *start_worker(void *ctx){
 		//expire_outdated_tuples (w_ctx);
 
 		/* sleep for */
-		std::chrono::seconds sec(w_ctx->sleep_time);
+		std::chrono::milliseconds msec(w_ctx->sleep_time);
 	}
 	return;
 }

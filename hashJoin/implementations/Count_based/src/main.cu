@@ -42,6 +42,7 @@ static void usage(){
 	printf ("  -w SIZE  window size for stream R (in seconds)\n");
 	printf ("  -W SIZE  window size for stream S (in seconds)\n");
 	printf ("  -p [cpu, gpu]  processing mode (cpu or gpu)\n");
+	printf ("  -s MSEC  idle window time\n");
 }
 
 int main(int argc, char **argv) {
@@ -61,6 +62,7 @@ int main(int argc, char **argv) {
 	ctx->int_value_range   = 10000;
 	ctx->float_value_range = 10000;
 	ctx->processing_mode = cpu_mode;
+	ctx->sleep_time= 0;
 
 	ctx->data_S_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH*3,0);
 	ctx->data_R_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH*3,0);
@@ -111,6 +113,8 @@ int main(int argc, char **argv) {
 				else
 					ctx->processing_mode = cpu_mode;
 				break;
+			case 's':
+				ctx->sleep_time = strtol (optarg, NULL, 10);
 			case 'h':
 			case '?':
 			default:
@@ -139,6 +143,7 @@ int main(int argc, char **argv) {
 	w_ctx->data_S_queue = ctx->data_S_queue;
 	w_ctx->data_R_queue = ctx->data_R_queue;
 	w_ctx->processing_mode = ctx->processing_mode;
+	w_ctx->sleep_time = ctx->sleep_time;
 	w_ctx->S.a = ctx->S.a;
 	w_ctx->S.b = ctx->S.b;
 	w_ctx->R.x = ctx->R.x;

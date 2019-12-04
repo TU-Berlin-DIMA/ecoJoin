@@ -52,6 +52,9 @@ struct master_ctx_t {
 
 	FILE *logfile;
 
+	/* time to sleep after processing */
+    	unsigned sleep_time;
+	
 	/**
 	 * Input data stream R
 	 */
