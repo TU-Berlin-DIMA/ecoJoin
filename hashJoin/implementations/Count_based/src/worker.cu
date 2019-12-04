@@ -54,7 +54,7 @@ void *start_worker(void *ctx){
 		//expire_outdated_tuples (w_ctx);
 
 		/* sleep for */
-		//std::chrono::seconds sec(w_ctx->sleep_time);
+		std::chrono::seconds sec(w_ctx->sleep_time);
 	}
 	return;
 }
@@ -89,7 +89,7 @@ void process_s_gpu (worker_ctx_t *w_ctx){
 		CUDA_SAFE(cudaHostAlloc((void**)&output_buffer, (w_ctx->r_end - w_ctx->r_first)*sizeof(int),0));
 		std::memset(output_buffer, 0,  (w_ctx->r_end - w_ctx->r_first)*sizeof(int));
 
-		compare_kernel_new_s<<<1,1>>>(output_buffer, 
+		compare_kernel_new_s<<<1,128>>>(output_buffer, 
 				w_ctx->S.a, w_ctx->S.b, w_ctx->R.x, w_ctx->R.y, 
 				msg.msg.chunk_S.start_idx, msg.msg.chunk_S.start_idx +  TUPLES_PER_CHUNK_S, 
 				w_ctx->r_first, w_ctx->r_end);
@@ -117,7 +117,7 @@ void process_r_gpu (worker_ctx_t *w_ctx){
 		CUDA_SAFE(cudaHostAlloc((void**)&output_buffer, (w_ctx->r_end - w_ctx->r_first)*sizeof(int),0));
 		std::memset(output_buffer, 0,  (w_ctx->r_end - w_ctx->r_first)*sizeof(int));
 
-		compare_kernel_new_s<<<1,1>>>(output_buffer, 
+		compare_kernel_new_s<<<1,128>>>(output_buffer, 
 				w_ctx->S.a, w_ctx->S.b, w_ctx->R.x, w_ctx->R.y, 
 				w_ctx->s_first, w_ctx->s_end, 
 				msg.msg.chunk_R.start_idx, msg.msg.chunk_R.start_idx +  TUPLES_PER_CHUNK_R);
