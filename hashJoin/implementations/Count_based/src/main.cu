@@ -43,6 +43,7 @@ static void usage(){
 	printf ("  -W SIZE  window size for stream S (in seconds)\n");
 	printf ("  -p [cpu, gpu]  processing mode (cpu or gpu)\n");
 	printf ("  -s MSEC  idle window time\n");
+	printf ("  -S MSEC  process window time\n");
 }
 
 int main(int argc, char **argv) {
@@ -62,7 +63,8 @@ int main(int argc, char **argv) {
 	ctx->int_value_range   = 10000;
 	ctx->float_value_range = 10000;
 	ctx->processing_mode = cpu_mode;
-	ctx->sleep_time= 0;
+	ctx->idle_window_time = 0;
+	ctx->process_window_time = 10;
 
 	ctx->data_S_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH*3,0);
 	ctx->data_R_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH*3,0);
@@ -70,7 +72,7 @@ int main(int argc, char **argv) {
 
 
 	/* parse command lines */
-	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:")) != -1)
+	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:")) != -1)
 	{
 		switch (ch)
 		{
@@ -114,7 +116,12 @@ int main(int argc, char **argv) {
 					ctx->processing_mode = cpu_mode;
 				break;
 			case 's':
-				ctx->sleep_time = strtol (optarg, NULL, 10);
+				ctx->idle_window_time = strtol (optarg, NULL, 10);
+				break;
+			case 'S':
+				ctx->process_window_time = strtol (optarg, NULL, 10);
+				break;
+
 			case 'h':
 			case '?':
 			default:
@@ -143,7 +150,8 @@ int main(int argc, char **argv) {
 	w_ctx->data_S_queue = ctx->data_S_queue;
 	w_ctx->data_R_queue = ctx->data_R_queue;
 	w_ctx->processing_mode = ctx->processing_mode;
-	w_ctx->sleep_time = ctx->sleep_time;
+	w_ctx->idle_window_time = ctx->idle_window_time;
+	w_ctx->process_window_time = ctx->process_window_time;
 	w_ctx->S.a = ctx->S.a;
 	w_ctx->S.b = ctx->S.b;
 	w_ctx->R.x = ctx->R.x;
@@ -152,23 +160,21 @@ int main(int argc, char **argv) {
 	w_ctx->s_first = 0;
 	w_ctx->r_end = 0;
 	w_ctx->s_end = 0;
-	w_ctx->sleep_time= 0;
+	w_ctx->partial_result_msg;
+	w_ctx->partial_result_msg.pos = 0;
 
 	fprintf (ctx->outfile, "# Setting up result collector...\n");
 	int status = 0;
 	status = pthread_create (&collector, NULL, collect_results, ctx);
 	assert (status == 0);
 	fprintf (ctx->outfile, "# Collector setup done.\n");
+	
 	printf ("#\n");
-
 	fprintf (ctx->outfile, "# Start Stream\n");
 	std::thread first (start_stream, ctx);
 	
-	// HASH TBL implementation
 	fprintf (ctx->outfile, "# Start Worker\n");
 	start_worker(w_ctx);
-	
-	//start_worker(ctx);
 	
 	first.join();
 

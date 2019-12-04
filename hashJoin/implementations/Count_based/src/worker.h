@@ -29,10 +29,7 @@ struct worker_ctx_t {
     unsigned s_end;
 
 
-    /* time to sleep after processing */
-    unsigned sleep_time;
-
-    /**
+   /**
      * Those pieces of R that we (need to) have locally for join
      * execution.     
      */
@@ -62,6 +59,10 @@ struct worker_ctx_t {
 
     /** window size for S (in sec) **/
     unsigned window_size_S;
+
+    /* time to sleep after processing */
+    unsigned idle_window_time;
+    unsigned process_window_time;
 };
 
 void *start_worker(void *ctx);

@@ -6,6 +6,7 @@
 #include <chrono>
 #include <thread>
 #include <cstring>
+#include <unistd.h>
 
 
 #include "data.h"
@@ -36,25 +37,27 @@ void *start_worker(void *ctx){
 	ringbuffer_t *r = w_ctx->data_R_queue;
 	ringbuffer_t *s = w_ctx->data_S_queue;	
 
+	 time_t start = time(0);
 	 while (true)
    	 {
 		/* process a message from the left queue if there's one waiting,
 		 * but only if we are not blocked on the other side */
-		/* if (!empty (ctx->left_recv_queue) && !full (ctx->right_send_queue))*/
 		if (!empty_ (r))
 		    process_r (w_ctx);
 
 		/* likewise, handle messages from the right queue,
 		 * but only if we are not blocked on the other side */
-		/*if (!empty (ctx->right_recv_queue) && !full (ctx->left_send_queue))*/
 		if (!empty_ (s))
 		    process_s (w_ctx);
 
 		/* check for tuple expiration */
 		//expire_outdated_tuples (w_ctx);
 
-		/* sleep for */
-		std::chrono::milliseconds msec(w_ctx->sleep_time);
+		if (difftime( time(0), start) == w_ctx->process_window_time){
+			start = time(0);
+			/* sleep for */
+			usleep(w_ctx->idle_window_time);
+		}
 	}
 	return;
 }
@@ -74,8 +77,6 @@ void process_r (worker_ctx_t *w_ctx){
 		process_r_gpu(w_ctx);
 	}
 }
-
-
 
 void process_s_gpu (worker_ctx_t *w_ctx){
 	core2core_msg_t msg;
@@ -173,8 +174,7 @@ void process_r_cpu (worker_ctx_t *w_ctx){
 static inline void
 emit_result (worker_ctx_t *ctx, unsigned int r, unsigned int s)
 {   
-    //printf("%d\n",ctx->partial_result_msg.pos);
-    assert (ctx->partial_result_msg.pos < RESULTS_PER_MESSAGE);
+    assert (!ctx->partial_result_msg.pos < RESULTS_PER_MESSAGE);
     ctx->partial_result_msg.msg[ctx->partial_result_msg.pos]
         = (result_t) { .r = r, .s = s };
 
