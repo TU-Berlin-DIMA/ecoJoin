@@ -2,6 +2,8 @@
 #define MASTER_H
 
 #include <stdio.h>
+#include <mutex>
+#include <condition_variable>
 
 #include "ringbuffer.h"
 #include "data.h"
@@ -51,10 +53,26 @@ struct master_ctx_t {
 	FILE *outfile;
 
 	FILE *logfile;
+	
+	/** Enable the data collection thread  **/
+	bool data_collection_monitor;
 
 	/* time to sleep after processing */
     	unsigned idle_window_time;
     	unsigned process_window_time;
+
+	/* index of the newest currently available tuple*/
+	unsigned r_available;
+	unsigned s_available;
+	
+	/* index of the newest currently available tuple*/
+	unsigned r_processed;
+	unsigned s_processed;
+
+	/* vars to lock x_available */
+	// See: https://en.cppreference.com/w/cpp/thread/condition_variable
+	std::condition_variable data_cv;
+	std::mutex data_mutex;
 	
 	/**
 	 * Input data stream R

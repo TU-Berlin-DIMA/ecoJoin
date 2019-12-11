@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <thread>
+#include <condition_variable>
 #include "assert.h"
 
 #include "worker.h"
@@ -25,9 +26,6 @@
 static void start_stream(master_ctx_t *ctx);
 static void start_worker(master_ctx_t *ctx);
 static void *collect_results (void *ctx);
-static void emit_result (master_ctx_t *ctx, unsigned int r, unsigned int s);
-static inline void flush_result (master_ctx_t *ctx);
-
 
 /**
  * Print usage information
@@ -44,13 +42,15 @@ static void usage(){
 	printf ("  -p [cpu, gpu]  processing mode (cpu or gpu)\n");
 	printf ("  -s MSEC  idle window time\n");
 	printf ("  -S MSEC  process window time\n");
+	printf ("  -m 	    enable data collection monitor\n");
 }
 
 int main(int argc, char **argv) {
 	master_ctx_t *ctx = (master_ctx_t *) malloc (sizeof (*ctx));
 	int ch;
-	pthread_t     collector;
+	pthread_t collector;
 
+	ctx->result_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH,0);
 	ctx->outfile = stdout;
 	ctx->logfile = stdout;
 	ctx->resultfile = NULL;
@@ -65,14 +65,14 @@ int main(int argc, char **argv) {
 	ctx->processing_mode = cpu_mode;
 	ctx->idle_window_time = 0;
 	ctx->process_window_time = 10;
-
-	ctx->data_S_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH*3,0);
-	ctx->data_R_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH*3,0);
-	ctx->result_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH,0);
-
+	ctx->data_collection_monitor = false;
+	ctx->r_available = 0;
+	ctx->s_available = 0;
+	ctx->r_processed = 0;
+	ctx->s_processed = 0;
 
 	/* parse command lines */
-	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:")) != -1)
+	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:m")) != -1)
 	{
 		switch (ch)
 		{
@@ -121,6 +121,9 @@ int main(int argc, char **argv) {
 			case 'S':
 				ctx->process_window_time = strtol (optarg, NULL, 10);
 				break;
+			case 'm':
+				ctx->data_collection_monitor = true;
+				break;
 
 			case 'h':
 			case '?':
@@ -145,10 +148,9 @@ int main(int argc, char **argv) {
 	else if (ctx->processing_mode == gpu_mode)
 		fprintf (ctx->outfile, "# Use GPU processing mode\n");
 	
+	/* Setup worker */
 	worker_ctx_t *w_ctx = (worker_ctx_t *) malloc (sizeof (*w_ctx));
 	w_ctx->result_queue = ctx->result_queue;
-	w_ctx->data_S_queue = ctx->data_S_queue;
-	w_ctx->data_R_queue = ctx->data_R_queue;
 	w_ctx->processing_mode = ctx->processing_mode;
 	w_ctx->idle_window_time = ctx->idle_window_time;
 	w_ctx->process_window_time = ctx->process_window_time;
@@ -158,16 +160,24 @@ int main(int argc, char **argv) {
 	w_ctx->R.y = ctx->R.y;
 	w_ctx->r_first = 0;
 	w_ctx->s_first = 0;
-	w_ctx->r_end = 0;
-	w_ctx->s_end = 0;
+	w_ctx->r_processed = &(ctx->r_processed);
+	w_ctx->s_processed = &(ctx->s_processed);
+	w_ctx->r_available = &(ctx->r_available);
+	w_ctx->s_available = &(ctx->s_available);
 	w_ctx->partial_result_msg;
 	w_ctx->partial_result_msg.pos = 0;
+	w_ctx->data_cv = &(ctx->data_cv);
+	w_ctx->data_mutex = &(ctx->data_mutex);
 
-	fprintf (ctx->outfile, "# Setting up result collector...\n");
-	int status = 0;
-	status = pthread_create (&collector, NULL, collect_results, ctx);
-	assert (status == 0);
-	fprintf (ctx->outfile, "# Collector setup done.\n");
+
+	if (ctx->data_collection_monitor) {
+		
+		fprintf (ctx->outfile, "# Setting up result collector...\n");
+		int status = 0;
+		status = pthread_create (&collector, NULL, collect_results, ctx);
+		assert (status == 0);
+		fprintf (ctx->outfile, "# Collector setup done.\n");
+	}
 	
 	printf ("#\n");
 	fprintf (ctx->outfile, "# Start Stream\n");
@@ -180,52 +190,6 @@ int main(int argc, char **argv) {
 
 	return EXIT_SUCCESS;
 }
-
-
-static inline bool
-send_new_R_tuple (master_ctx_t *ctx, unsigned int start_idx, unsigned int size)
-{
-    chunk_R_msg_t c_msg;
-    c_msg.start_idx = start_idx;
-    c_msg.size = size;
-
-    core2core_msg_t msg;
-    msg.type = new_R_msg;
-    msg.msg.chunk_R = c_msg ;
-
-    bool ret = send (ctx->data_R_queue, &msg, sizeof (msg));
-
-    if (!ret)
-    {
-        fprintf (stderr, "Cannot send R tuple. FIFO queue full.\n");
-        exit (EXIT_FAILURE);
-    }
-
-    return ret;
-}
-
-static inline bool
-send_new_S_tuple (master_ctx_t *ctx, unsigned int start_idx, unsigned int size)
-{   
-    chunk_S_msg_t c_msg;
-    c_msg.start_idx = start_idx;
-    c_msg.size = size;
-
-    core2core_msg_t msg;
-    msg.type = new_S_msg;
-    msg.msg.chunk_S = c_msg ;
-
-    bool ret = send (ctx->data_S_queue, &msg, sizeof (msg));
-
-    if (!ret)
-    {
-        fprintf (stderr, "Cannot send S tuple. FIFO queue full.\n");
-        exit (EXIT_FAILURE);
-    }
-
-    return ret;
-}
-
 
 /**
  * Handles the stream queues
@@ -258,32 +222,26 @@ static void start_stream (master_ctx_t *ctx)
 	t_offset = t_start.tv_sec;
 	int t_last_sec = 0;
 	int t_last_nsec = 0;
+	printf("%d\n", ctx->r_available);
+	printf("%d\n", ctx->s_available);
 
-	/* current tuple marker */
-	unsigned r = 0;
-	unsigned s = 0;
+	while (ctx->r_available < ctx->num_tuples_R || ctx->s_available < ctx->num_tuples_S) {
 
-	unsigned r_end = 0;
-	unsigned s_end = 0;
-	
-	unsigned s_last_sent = 0;
-	unsigned r_last_sent = 0;
-
-	while (r < ctx->num_tuples_R || s < ctx->num_tuples_S)
-	{
 		/* is the next tuple an R or an S tuple? */
-		next_is_R = (ctx->R.t[r].tv_sec * 1000000000L + ctx->R.t[r].tv_nsec)
-			< (ctx->S.t[s].tv_sec * 1000000000L + ctx->S.t[s].tv_nsec);
+		next_is_R = (ctx->R.t[ctx->r_available].tv_sec * 1000000000L + ctx->R.t[ctx->r_available].tv_nsec)
+			< (ctx->S.t[ctx->s_available].tv_sec * 1000000000L + ctx->S.t[ctx->s_available].tv_nsec);
 
 		/* sleep until we have to send the next tuple */
 		if (next_is_R)
-			t_rel = ctx->R.t[r];
+			t_rel = ctx->R.t[ctx->r_available];
 		else
-			t_rel = ctx->S.t[s];
+			t_rel = ctx->S.t[ctx->s_available];
 
 		t_real = (struct timespec) { .tv_sec  = t_rel.tv_sec + t_offset,
 			.tv_nsec = t_rel.tv_nsec };
 	
+		hj_nanosleep (&t_real);
+
 		/* Print time */
 		/*const uint TIME_FMT = strlen("2012-12-31 12:59:59.123456789") + 1;
 		char timestr[TIME_FMT];
@@ -295,45 +253,24 @@ static void start_stream (master_ctx_t *ctx)
 		} else {
 			printf("CLOCK_REALTIME: time=%s\n", timestr);
 		}*/
-
-		hj_nanosleep (&t_real);
-
+		
+		/* Update available tuple */
 		if (next_is_R){
-			send_new_R_tuple (ctx, r, TUPLES_PER_CHUNK_R);
-			//r++;
-			r += TUPLES_PER_CHUNK_R;
+			ctx->r_available++;
+
+			/* Notify condition */
+			if (ctx->r_available >= ctx->r_processed + TUPLES_PER_CHUNK_R){
+				ctx->data_cv.notify_one();
+			}
 		} else {
-			send_new_S_tuple (ctx, s, TUPLES_PER_CHUNK_S);
-			//s++;
-			s += TUPLES_PER_CHUNK_S;
+			ctx->s_available++;
+
+			/* Notify condition */
+			if (ctx->s_available >= ctx->s_processed + TUPLES_PER_CHUNK_S){
+				ctx->data_cv.notify_one();
+			}
 		}
 		
-		/*if (!next_is_R){
-			int s_ = s;
-			for (unsigned int r_ = r_last_sent; r_ < r; r_++)
-			{
-				const a_t a = ctx->S.a[s_] - ctx->R.x[r_];
-				const b_t b = ctx->S.b[s_] - ctx->R.y[r_];
-				if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
-					emit_result (ctx, r_, s_);
-			}
-			s++;
-			s_last_sent = s;
-		}
-
-
-		if (next_is_R){
-			int r_ = r;
-			for (unsigned int s_ = s_last_sent; s_ < s; s_++)
-			{
-				const a_t a = ctx->S.a[s_] - ctx->R.x[r_];
-				const b_t b = ctx->S.b[s_] - ctx->R.y[r_];
-				if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
-					emit_result (ctx, r_, s_);
-			}
-			r++;
-			r_last_sent = r;
-		}*/
 	}
 	printf("End of stream\n");
 	exit(0);
@@ -391,9 +328,10 @@ collect_results (void *arg)
 			 * are encoded in the message.
 			 * See worker_ctx_t#partial_result_msg.
 			 */
-			num_result = msg_size / sizeof (result_t);
+			//num_result = msg_size / sizeof (result_t);
+			n_now += msg_size / sizeof (result_t);
 
-			for (unsigned int j = 0; j < num_result; j++)
+			/*for (unsigned int j = 0; j < num_result; j++)
 			{
 				if (ctx->resultfile)
 				{
@@ -412,23 +350,8 @@ collect_results (void *arg)
 							ctx->S.d[msg[j].s] ? "true" : "false"
 							);
 				}
-				/*
-				printf (	"%4lu.%09lu | %8u | %8.2f | %20s || "
-							"%4lu.%09lu | %8u | %8.2f | %10.2f | %5s || "
-							"\n",
-							ctx->R.t[msg[j].r].tv_sec,
-							ctx->R.t[msg[j].r].tv_nsec,
-							ctx->R.x[msg[j].r], ctx->R.y[msg[j].r],
-							ctx->R.z[msg[j].r],
-							ctx->S.t[msg[j].s].tv_sec,
-							ctx->S.t[msg[j].s].tv_nsec,
-							ctx->S.a[msg[j].s], ctx->S.b[msg[j].s],
-							ctx->S.c[msg[j].s],
-							ctx->S.d[msg[j].s] ? "true" : "false"
-							);
-							*/
 				n_now++;
-			}
+			}*/
 		}
 
 		/* check time stamp to report output data rate */
@@ -439,8 +362,7 @@ collect_results (void *arg)
 		{
 			const double sec
 				= ((double) ((t_now.tv_sec * 1000000000L + t_now.tv_nsec)
-							- (t_last.tv_sec * 1000000000L + t_last.tv_nsec)))
-				/ 1e9;
+							- (t_last.tv_sec * 1000000000L + t_last.tv_nsec)))/1e9;
 
 			fprintf (stdout, "%u result tuples retrieved in %5.3f sec "
 					"(%6.2f tuples/sec)\n",
@@ -459,61 +381,3 @@ collect_results (void *arg)
 	return NULL;
 }
 
-/*static void
-emit_result (master_ctx_t *ctx, unsigned int r, unsigned int s)
-{
-    //LOG(ctx->logfile, "result: r = %u, s = %u", r, s);
-
-    assert (ctx->partial_result_msg.pos < RESULTS_PER_MESSAGE);
-
-    ctx->partial_result_msg.msg[ctx->partial_result_msg.pos]
-        = (result_t) { .r = r, .s = s };
-
-    ctx->partial_result_msg.pos++;
-
-    if (ctx->partial_result_msg.pos == RESULTS_PER_MESSAGE)
-        flush_result (ctx);
-}*/
-
-/**
- * Flush queue to result collector; see emit_result().
- */
-/*static inline void
-flush_result (master_ctx_t *ctx)
-{
-    if (ctx->partial_result_msg.pos != 0)
-    {
-        //LOG(ctx->logfile, "flushing result buffer (%u tuples)",
-        //        ctx->partial_result_msg.pos);
-
-        send (ctx->result_queue, &ctx->partial_result_msg.msg,
-                ctx->partial_result_msg.pos * sizeof (result_t));
-
-        ctx->partial_result_msg.pos = 0;
-    }
-    else
-    {
-        //LOG(ctx->logfile, "flushing requested, but nothing to flush");
-    }
-}*/
-
-/*
- * Dummy woker
- * Just removing queue items
- */
-static void start_worker(master_ctx_t *ctx)
-{
-	ringbuffer_t *r = ctx->data_R_queue;	
-	ringbuffer_t *s = ctx->data_S_queue;	
-
-	message_t *msg;
-
-	while(true)
-	{
-		peek(r,(void**) &msg);
-		receive(r, msg);
-		peek(s, (void**)&msg);
-		receive(s, msg);
-	}
-
-}

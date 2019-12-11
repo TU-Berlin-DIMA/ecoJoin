@@ -35,7 +35,7 @@ generate_data (master_ctx_t *ctx)
     unsigned long range;  /* interval between two tuples is 0..range nsec */
 
     /* sanity check */
-    /*
+    
     if ((ctx->num_tuples_R % TUPLES_PER_CHUNK_R != 0)
             || (ctx->num_tuples_S % TUPLES_PER_CHUNK_S != 0))
     {
@@ -43,7 +43,7 @@ generate_data (master_ctx_t *ctx)
                 "WARNING: tuple counts that are not a multiple of the chunk\n"
                 "         size may cause trouble with the join driver.\n");
     }
-    */
+    
 
     /* allocate memory */
 

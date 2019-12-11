@@ -3,6 +3,9 @@
 // Number of tuples processed per send Message for Stream S
 #define TUPLES_PER_CHUNK_S 64
 
+/* Thread number for GPU processing*/
+#define GPU_THREAD_NUM 128
+
 /**
  * Size of each FIFO message queue (in number of messages).
  */

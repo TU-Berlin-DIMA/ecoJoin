@@ -13,21 +13,31 @@
 
 
 struct worker_ctx_t {
-    ringbuffer_t *data_S_queue;
-    ringbuffer_t *data_R_queue;
     ringbuffer_t *result_queue;      /**< results sent back to master */
-    
+   
+    /* Message to send already */
     struct {
         unsigned int   pos;   /**< number of tuples already in the message */
         result_msg_t   msg;   /**< the partial message itself */
     } partial_result_msg;
 
-    unsigned r_first;
-    unsigned r_end;
-    
-    unsigned s_first;
-    unsigned s_end;
 
+    /* Current start of the window for r and s*/
+    unsigned r_first;
+    unsigned s_first;
+
+    /* index to newest tuples available by master */
+    unsigned *r_available;
+    unsigned *s_available;
+
+    /* index to last processed tuple */
+    unsigned *r_processed;
+    unsigned *s_processed;
+
+    /* vars to lock x_available */
+    // See: https://en.cppreference.com/w/cpp/thread/condition_variable
+    std::condition_variable *data_cv;
+    std::mutex *data_mutex;
 
    /**
      * Those pieces of R that we (need to) have locally for join
