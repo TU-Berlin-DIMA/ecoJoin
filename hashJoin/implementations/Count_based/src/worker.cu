@@ -54,6 +54,7 @@ void *start_worker(void *ctx){
 		    process_s (w_ctx);
 
 		/* check for tuple expiration TODO*/
+		/* TODO: Auf GPU? */
 		//expire_outdated_tuples (w_ctx);
 
 		/* Check if we are still in the process time window */
@@ -91,6 +92,7 @@ void process_s_gpu (worker_ctx_t *w_ctx){
 
 	if ((*(w_ctx->r_processed) - w_ctx->r_first) > 0){
 		/* Allocate Memory */
+		// TODO: Worst case buffer Schlechteste Match rate
 		CUDA_SAFE(cudaHostAlloc((void**)&output_buffer, (*(w_ctx->r_processed) - w_ctx->r_first) * TUPLES_PER_CHUNK_S * sizeof(int),0));
 		std::memset(output_buffer, 0,  (*(w_ctx->r_processed) - w_ctx->r_first) * TUPLES_PER_CHUNK_S * sizeof(int));
 
@@ -189,6 +191,11 @@ void process_r_cpu (worker_ctx_t *w_ctx){
 	*(w_ctx->r_processed) += TUPLES_PER_CHUNK_R;
 }
 
+/*
+ *  TODO: Daten nur in den Outbuffer schreiben
+ *  Nicht vom compiler optimiert
+ */
+
 static inline void
 emit_result (worker_ctx_t *ctx, unsigned int r, unsigned int s)
 {   
@@ -207,7 +214,6 @@ flush_result (worker_ctx_t *ctx)
 {
     if (ctx->partial_result_msg.pos != 0)
     {
-
         if (! send (ctx->result_queue, &ctx->partial_result_msg.msg,
                     ctx->partial_result_msg.pos * sizeof (result_t)))
         {

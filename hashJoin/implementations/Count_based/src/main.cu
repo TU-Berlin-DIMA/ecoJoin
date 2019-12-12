@@ -181,12 +181,12 @@ int main(int argc, char **argv) {
 	
 	printf ("#\n");
 	fprintf (ctx->outfile, "# Start Stream\n");
-	std::thread first (start_stream, ctx);
-	
+	//std::thread first (start_stream, ctx);
+	start_stream(ctx);
 	fprintf (ctx->outfile, "# Start Worker\n");
-	start_worker(w_ctx);
+	//start_worker(w_ctx);
 	
-	first.join();
+	//first.join();
 
 	return EXIT_SUCCESS;
 }
@@ -222,8 +222,6 @@ static void start_stream (master_ctx_t *ctx)
 	t_offset = t_start.tv_sec;
 	int t_last_sec = 0;
 	int t_last_nsec = 0;
-	printf("%d\n", ctx->r_available);
-	printf("%d\n", ctx->s_available);
 
 	while (ctx->r_available < ctx->num_tuples_R || ctx->s_available < ctx->num_tuples_S) {
 
@@ -240,6 +238,7 @@ static void start_stream (master_ctx_t *ctx)
 		t_real = (struct timespec) { .tv_sec  = t_rel.tv_sec + t_offset,
 			.tv_nsec = t_rel.tv_nsec };
 	
+		
 		hj_nanosleep (&t_real);
 
 		/* Print time */
@@ -254,10 +253,27 @@ static void start_stream (master_ctx_t *ctx)
 			printf("CLOCK_REALTIME: time=%s\n", timestr);
 		}*/
 		
+		/*
+		 * TODO:
+		 * Verschiebe um throughput pro sec
+		 * schlafe 1 sec
+		 * Unterschied im Througput 
+		 * Auslastung CPU messen ohne worker
+		 */
+
+		/*
+		 * TODO: Hier Windows
+		 */ 
+
 		/* Update available tuple */
 		if (next_is_R){
 			ctx->r_available++;
 
+			/*
+			 * TODO.
+			 * Batchsize kleiner Throughput ist nicht möglich
+			 *  TUPLES_PER_CHUNK_R <= Throughput
+			 */ 
 			/* Notify condition */
 			if (ctx->r_available >= ctx->r_processed + TUPLES_PER_CHUNK_R){
 				ctx->data_cv.notify_one();
@@ -270,7 +286,6 @@ static void start_stream (master_ctx_t *ctx)
 				ctx->data_cv.notify_one();
 			}
 		}
-		
 	}
 	printf("End of stream\n");
 	exit(0);

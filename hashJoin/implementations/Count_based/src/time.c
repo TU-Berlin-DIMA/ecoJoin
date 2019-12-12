@@ -20,17 +20,35 @@
 #include "time.h"
 #include "string.h"
 
-//#ifndef HAVE_LIBRT
+#include <unistd.h>
+#include <iostream>
 
-/*int hj_gettime (timespec *ts) {
+/*
+ * Wait until timespec time is reached
+ */
+void hj_nanosleep (timespec *ts)
+{
     struct timeval t;
     gettimeofday (&t, NULL);
-    ts->tv_sec  = t.tv_sec;
-    ts->tv_nsec = t.tv_usec * 1000;
-    return 0;
-}*/
 
-void hj_nanosleep (timespec *ts)
+    long i = (ts->tv_sec * 1000000 + ts->tv_nsec / 1000) - (t.tv_sec * 1000000 + t.tv_usec);
+    unsigned a = (ts->tv_sec * 1000000 + ts->tv_nsec / 1000) - (t.tv_sec * 1000000 + t.tv_usec);
+
+    /*
+    long s = (ts->tv_sec * 1000000 + ts->tv_nsec / 1000);
+    long b = (t.tv_sec * 1000000 + t.tv_usec);
+    std::cout << i << " " << s << " "<< b << "\n";
+    */
+
+    if (i > 0)
+	    usleep(a);
+}
+
+
+/*
+ * Legacy implementation since busy waiting produces cpu overhead
+ */
+void hj_nanosleep_legacy (timespec *ts)
 {
     struct timeval t;
     do {
@@ -38,8 +56,6 @@ void hj_nanosleep (timespec *ts)
     } while (t.tv_sec * 1000000000 + t.tv_usec * 1000
             < ts->tv_sec * 1000000000 + ts->tv_nsec);
 }
-
-//#endif
 
 // buf needs to store 30 characters
 int timespec2str(char *buf, unsigned int len, struct timespec *ts) {
