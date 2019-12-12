@@ -6,6 +6,9 @@
 /* Thread number for GPU processing*/
 #define GPU_THREAD_NUM 128
 
+/* Lock the worker until the master notifies*/
+#define MAIN_PROCESSING_LOCK 0
+
 /**
  * Size of each FIFO message queue (in number of messages).
  */

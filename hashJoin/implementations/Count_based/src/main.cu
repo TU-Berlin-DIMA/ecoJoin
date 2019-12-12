@@ -2,7 +2,6 @@
  * Supports Time-based windows
  */
 
-
 #include "parameter.h"
 
 #include "messages.h"
@@ -10,7 +9,7 @@
 #include "data.h"
 #include "time.h"
 #include "master.h"
-#include "string.h"
+#include "worker.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -19,12 +18,11 @@
 #include <thread>
 #include <condition_variable>
 #include "assert.h"
+#include "string.h"
 
-#include "worker.h"
 
 /* ----- forward declarations ----- */
 static void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx);
-static void *collect_results (void *ctx);
 
 /**
  * Print usage information
@@ -41,13 +39,11 @@ static void usage(){
 	printf ("  -p [cpu, gpu]  processing mode (cpu or gpu)\n");
 	printf ("  -s MSEC  idle window time\n");
 	printf ("  -S MSEC  process window time\n");
-	printf ("  -m 	    enable data collection monitor\n");
 }
 
 int main(int argc, char **argv) {
 	master_ctx_t *ctx = (master_ctx_t *) malloc (sizeof (*ctx));
 	int ch;
-	pthread_t collector;
 
 	ctx->result_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH,0);
 	ctx->outfile = stdout;
@@ -64,14 +60,13 @@ int main(int argc, char **argv) {
 	ctx->processing_mode = cpu_mode;
 	ctx->idle_window_time = 0;
 	ctx->process_window_time = 10;
-	ctx->data_collection_monitor = false;
 	ctx->r_available = 0;
 	ctx->s_available = 0;
 	ctx->r_processed = 0;
 	ctx->s_processed = 0;
 
 	/* parse command lines */
-	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:m")) != -1)
+	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:")) != -1)
 	{
 		switch (ch)
 		{
@@ -120,9 +115,6 @@ int main(int argc, char **argv) {
 			case 'S':
 				ctx->process_window_time = strtol (optarg, NULL, 10);
 				break;
-			case 'm':
-				ctx->data_collection_monitor = true;
-				break;
 
 			case 'h':
 			case '?':
@@ -166,8 +158,6 @@ int main(int argc, char **argv) {
 	w_ctx->s_processed = &(ctx->s_processed);
 	w_ctx->r_available = &(ctx->r_available);
 	w_ctx->s_available = &(ctx->s_available);
-	w_ctx->partial_result_msg;
-	w_ctx->partial_result_msg.pos = 0;
 	w_ctx->data_cv = &(ctx->data_cv);
 	w_ctx->data_mutex = &(ctx->data_mutex);
 	/* Statistics*/
@@ -203,7 +193,6 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	time_t t_offset;
 
 	struct timespec t_start;
-        struct timespec t_end;
 
 	if (hj_gettime (&t_start))
 	{
@@ -217,8 +206,6 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	t_start.tv_sec += 5;
 	t_offset = t_start.tv_sec;
 	w_ctx->stats.start_time =  (struct timespec) { .tv_sec  = t_offset, .tv_nsec = 0 };
-	int t_last_sec = 0;
-	int t_last_nsec = 0;
 
 	while (ctx->r_available < ctx->num_tuples_R || ctx->s_available < ctx->num_tuples_S) {
 
@@ -259,24 +246,24 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 			 *  TUPLES_PER_CHUNK_R <= Throughput
 			 */ 
 			/* Notify condition */
-			if (ctx->r_available >= ctx->r_processed + TUPLES_PER_CHUNK_R){
+			if (MAIN_PROCESSING_LOCK && ctx->r_available >= ctx->r_processed + TUPLES_PER_CHUNK_R){
 				ctx->data_cv.notify_one();
 			}
 		} else {
 			ctx->s_available++;
 
 			/* Notify condition */
-			if (ctx->s_available >= ctx->s_processed + TUPLES_PER_CHUNK_S){
+			if (MAIN_PROCESSING_LOCK && ctx->s_available >= ctx->s_processed + TUPLES_PER_CHUNK_S){
 				ctx->data_cv.notify_one();
 			}
 		}
 	}
-	printf("End of stream\n");
+	printf("# End of stream\n\n");
 
-	fprintf (ctx->outfile, "Output Tuples       : %u\n", w_ctx->stats.processed_output_tuples);
-	fprintf (ctx->outfile, "Throughput (tuple/s): %f\n", w_ctx->stats.processed_output_tuples/((float)ctx->num_tuples_R/(float)ctx->rate_R));
-	fprintf (ctx->outfile, "Average Latency (ms): %f\n", (float)w_ctx->stats.summed_latency/(float)w_ctx->stats.processed_output_tuples*0.001);
-	fprintf (ctx->outfile, "Processed Index     : r %u s %u\n", ctx->r_processed, ctx->s_processed);
-	fprintf (ctx->outfile, "Available Index     : r %u s %u\n", ctx->r_available, ctx->s_available);
+	fprintf (ctx->outfile, "# Output Tuples       : %u\n", w_ctx->stats.processed_output_tuples);
+	fprintf (ctx->outfile, "# Throughput (tuple/s): %f\n", w_ctx->stats.processed_output_tuples/((float)ctx->num_tuples_R/(float)ctx->rate_R));
+	fprintf (ctx->outfile, "# Average Latency (ms): %f\n", (float)w_ctx->stats.summed_latency/(float)w_ctx->stats.processed_output_tuples*0.001);
+	fprintf (ctx->outfile, "# Processed Index     : r %u s %u\n", ctx->r_processed, ctx->s_processed);
+	fprintf (ctx->outfile, "# Available Index     : r %u s %u\n", ctx->r_available, ctx->s_available);
 	exit(0);
 }

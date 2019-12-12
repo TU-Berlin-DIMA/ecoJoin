@@ -41,9 +41,11 @@ void *start_worker(void *ctx){
 		/* Wait until main releases the lock and enough data arrived
 		 * Using conditional variables we avoid busy waiting
 		 */
-    		std::unique_lock<std::mutex> lk(*(w_ctx->data_mutex));
-    		w_ctx->data_cv->wait(lk, [&](){return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + TUPLES_PER_CHUNK_R)
+		if (MAIN_PROCESSING_LOCK){
+			std::unique_lock<std::mutex> lk(*(w_ctx->data_mutex));
+			w_ctx->data_cv->wait(lk, [&](){return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + TUPLES_PER_CHUNK_R)
 				   || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + TUPLES_PER_CHUNK_S);});
+		}
 		
 		/* process TUPLES_PER_CHUNK_R if there are that many tuples available */
 		if (*(w_ctx->r_available) >= *(w_ctx->r_processed) + TUPLES_PER_CHUNK_R)
