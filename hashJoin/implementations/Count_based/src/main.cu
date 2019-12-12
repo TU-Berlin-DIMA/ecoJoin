@@ -276,5 +276,7 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	fprintf (ctx->outfile, "Output Tuples       : %u\n", w_ctx->stats.processed_output_tuples);
 	fprintf (ctx->outfile, "Throughput (tuple/s): %f\n", w_ctx->stats.processed_output_tuples/((float)ctx->num_tuples_R/(float)ctx->rate_R));
 	fprintf (ctx->outfile, "Average Latency (ms): %f\n", (float)w_ctx->stats.summed_latency/(float)w_ctx->stats.processed_output_tuples*0.001);
+	fprintf (ctx->outfile, "Processed Index     : r %u s %u\n", ctx->r_processed, ctx->s_processed);
+	fprintf (ctx->outfile, "Available Index     : r %u s %u\n", ctx->r_available, ctx->s_available);
 	exit(0);
 }
