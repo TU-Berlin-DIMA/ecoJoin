@@ -24,15 +24,8 @@
 #define hj_gettime(tm) \
     clock_gettime (CLOCK_REALTIME, (tm))
 
-//#define hj_nanosleep(ts) \
-//    clock_nanosleep (CLOCK_REALTIME, TIMER_ABSTIME, (ts), NULL)
-
-
-
-//int hj_gettime (struct timespec *ts);
-
 void hj_nanosleep (struct timespec *ts);
 
-int timespec2str(char *buf, unsigned int len, struct timespec *ts);
+void print_timespec(struct timespec *time);
 
 #endif  /* TIME_H */

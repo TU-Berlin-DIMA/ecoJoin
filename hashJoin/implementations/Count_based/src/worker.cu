@@ -7,7 +7,7 @@
 #include <thread>
 #include <cstring>
 #include <unistd.h>
-
+#include <sys/time.h>
 
 #include "data.h"
 #include "master.h"
@@ -196,38 +196,30 @@ void process_r_cpu (worker_ctx_t *w_ctx){
  *  Nicht vom compiler optimiert
  */
 
+/*
+ *  Emit result is called every time a new tuple output tuple is produced
+ *  We update our statistics data
+ */ 
 static inline void
-emit_result (worker_ctx_t *ctx, unsigned int r, unsigned int s)
+emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s) 
 {   
-    assert (!ctx->partial_result_msg.pos < RESULTS_PER_MESSAGE);
-    ctx->partial_result_msg.msg[ctx->partial_result_msg.pos]
-        = (result_t) { .r = r, .s = s };
+	/* Update latency statistics */
+	struct timeval t;
+    	gettimeofday (&t, NULL);
+	
+	/* Choose the older tuple to calc the latency*/
+	if (w_ctx->S.t[s].tv_sec*1000000000L + w_ctx->S.t[s].tv_nsec >
+		w_ctx->R.t[r].tv_sec*1000000000L + w_ctx->R.t[r].tv_nsec){
+		w_ctx->stats.summed_latency += ((t.tv_sec * 1000000 + t.tv_usec) - 
+				((w_ctx->S.t[s].tv_sec + w_ctx->stats.start_time.tv_sec) * 1000000 + w_ctx->S.t[s].tv_nsec / 1000));
+	} else {
+		w_ctx->stats.summed_latency += ((t.tv_sec * 1000000 + t.tv_usec) - 
+				((w_ctx->R.t[r].tv_sec + w_ctx->stats.start_time.tv_sec) * 1000000 + w_ctx->R.t[r].tv_nsec / 1000));
+	}
 
-    ctx->partial_result_msg.pos++;
-
-    if (ctx->partial_result_msg.pos == RESULTS_PER_MESSAGE)
-        flush_result (ctx);
+	w_ctx->stats.processed_output_tuples++;
 }
 
-static inline void
-flush_result (worker_ctx_t *ctx)
-{
-    if (ctx->partial_result_msg.pos != 0)
-    {
-        if (! send (ctx->result_queue, &ctx->partial_result_msg.msg,
-                    ctx->partial_result_msg.pos * sizeof (result_t)))
-        {
-            fprintf (stderr, "Cannot send result. FIFO full.\n");
-            exit (EXIT_FAILURE);
-        }
-
-        ctx->partial_result_msg.pos = 0;
-    }
-    else
-    {
-        //LOG(ctx->log, "flushing requested, but nothing to flush");
-    }
-}
 
 /*
 void

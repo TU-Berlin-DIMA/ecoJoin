@@ -44,7 +44,6 @@ void hj_nanosleep (timespec *ts)
 	    usleep(a);
 }
 
-
 /*
  * Legacy implementation since busy waiting produces cpu overhead
  */
@@ -76,4 +75,17 @@ int timespec2str(char *buf, unsigned int len, struct timespec *ts) {
         return 3;
 
     return 0;
+}
+
+void print_timespec(struct timespec time){
+   	const uint TIME_FMT = strlen("2012-12-31 12:59:59.123456789") + 1;
+	char timestr[TIME_FMT];
+
+	struct timeval t;
+
+	if (timespec2str(timestr, sizeof(timestr), &time) != 0) {
+		printf("timespec2str failed!\n");
+	} else {
+		printf("CLOCK_REALTIME: time=%s\n", timestr);
+	}
 }

@@ -5,15 +5,27 @@
 #include "parameter.h"
 
 #include <stdio.h>
+#include <time.h>
 
 #include "ringbuffer.h"
 #include "data.h"
 #include "messages.h"
 #include "master.h"
 
+struct statistics {
+    /* Timestamp when the stream started *stream started */
+    struct timespec start_time;
+
+    /* Number of tuples that where matched by the join*/
+    unsigned processed_output_tuples;
+
+    /* latency in ms of each tuple that was processed by the join*/
+    long summed_latency;
+};
 
 struct worker_ctx_t {
-    ringbuffer_t *result_queue;      /**< results sent back to master */
+    /* stores statistics */
+    statistics  stats;
    
     /* Message to send already */
     struct {
@@ -44,8 +56,9 @@ struct worker_ctx_t {
      * execution.     
      */
     struct {
-        x_t        *x;
-        y_t        *y;
+	struct timespec *t;
+        x_t             *x;
+        y_t             *y;
     } R;
 
     /**
@@ -53,8 +66,9 @@ struct worker_ctx_t {
      * execution.
      */
     struct {
-        a_t        *a;
-        b_t        *b;
+	struct timespec *t;
+        a_t             *a;
+        b_t             *b;
     } S;
     
     /**
@@ -74,6 +88,8 @@ struct worker_ctx_t {
     unsigned idle_window_time;
     unsigned process_window_time;
 };
+
+
 
 void *start_worker(void *ctx);
 #endif  /* HASH_JOIN_WORKER_H */

@@ -23,8 +23,7 @@
 #include "worker.h"
 
 /* ----- forward declarations ----- */
-static void start_stream(master_ctx_t *ctx);
-static void start_worker(master_ctx_t *ctx);
+static void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx);
 static void *collect_results (void *ctx);
 
 /**
@@ -140,6 +139,8 @@ int main(int argc, char **argv) {
 			ctx->rate_R, ctx->rate_S);
 	fprintf (ctx->outfile, "#   - window_size_R: %u; window_size_S: %u\n",
 			ctx->window_size_R, ctx->window_size_S);
+	if (ctx->window_size_S == ctx->window_size_R && ctx->num_tuples_R == ctx->num_tuples_S)
+		fprintf (ctx->outfile, "# Stream will run for %f minutes\n",(float)ctx->num_tuples_R/(float)ctx->rate_R/60);
 	generate_data (ctx);
 	fprintf (ctx->outfile, "# Data generation done.\n");
 
@@ -150,14 +151,15 @@ int main(int argc, char **argv) {
 	
 	/* Setup worker */
 	worker_ctx_t *w_ctx = (worker_ctx_t *) malloc (sizeof (*w_ctx));
-	w_ctx->result_queue = ctx->result_queue;
 	w_ctx->processing_mode = ctx->processing_mode;
 	w_ctx->idle_window_time = ctx->idle_window_time;
 	w_ctx->process_window_time = ctx->process_window_time;
 	w_ctx->S.a = ctx->S.a;
 	w_ctx->S.b = ctx->S.b;
+	w_ctx->S.t = ctx->S.t;
 	w_ctx->R.x = ctx->R.x;
 	w_ctx->R.y = ctx->R.y;
+	w_ctx->R.t = ctx->R.t;
 	w_ctx->r_first = 0;
 	w_ctx->s_first = 0;
 	w_ctx->r_processed = &(ctx->r_processed);
@@ -168,25 +170,19 @@ int main(int argc, char **argv) {
 	w_ctx->partial_result_msg.pos = 0;
 	w_ctx->data_cv = &(ctx->data_cv);
 	w_ctx->data_mutex = &(ctx->data_mutex);
+	/* Statistics*/
+	w_ctx->stats.processed_output_tuples = 0;
+	w_ctx->stats.summed_latency = 0;
+	w_ctx->stats.start_time = (struct timespec) { .tv_sec  = 0, .tv_nsec = 0 };
 
-
-	if (ctx->data_collection_monitor) {
-		
-		fprintf (ctx->outfile, "# Setting up result collector...\n");
-		int status = 0;
-		status = pthread_create (&collector, NULL, collect_results, ctx);
-		assert (status == 0);
-		fprintf (ctx->outfile, "# Collector setup done.\n");
-	}
-	
 	printf ("#\n");
 	fprintf (ctx->outfile, "# Start Stream\n");
-	//std::thread first (start_stream, ctx);
-	start_stream(ctx);
+	std::thread first (start_stream, ctx, w_ctx);
+
 	fprintf (ctx->outfile, "# Start Worker\n");
-	//start_worker(w_ctx);
+	start_worker(w_ctx);
 	
-	//first.join();
+	first.join();
 
 	return EXIT_SUCCESS;
 }
@@ -194,7 +190,7 @@ int main(int argc, char **argv) {
 /**
  * Handles the stream queues
  */
-static void start_stream (master_ctx_t *ctx)
+static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 {
 	/* is the next tuple from the R stream */
 	bool next_is_R;
@@ -220,6 +216,7 @@ static void start_stream (master_ctx_t *ctx)
 	/* add a few seconds delay to play safe */
 	t_start.tv_sec += 5;
 	t_offset = t_start.tv_sec;
+	w_ctx->stats.start_time =  (struct timespec) { .tv_sec  = t_offset, .tv_nsec = 0 };
 	int t_last_sec = 0;
 	int t_last_nsec = 0;
 
@@ -238,21 +235,8 @@ static void start_stream (master_ctx_t *ctx)
 		t_real = (struct timespec) { .tv_sec  = t_rel.tv_sec + t_offset,
 			.tv_nsec = t_rel.tv_nsec };
 	
-		
 		hj_nanosleep (&t_real);
 
-		/* Print time */
-		/*const uint TIME_FMT = strlen("2012-12-31 12:59:59.123456789") + 1;
-		char timestr[TIME_FMT];
-
-		struct timeval t;
-
-		if (timespec2str(timestr, sizeof(timestr), &t_real) != 0) {
-			printf("timespec2str failed!\n");
-		} else {
-			printf("CLOCK_REALTIME: time=%s\n", timestr);
-		}*/
-		
 		/*
 		 * TODO:
 		 * Verschiebe um throughput pro sec
@@ -288,111 +272,8 @@ static void start_stream (master_ctx_t *ctx)
 		}
 	}
 	printf("End of stream\n");
+
+	fprintf (ctx->outfile, "Processed Tuples    : %u\n", w_ctx->stats.processed_output_tuples);
+	fprintf (ctx->outfile, "Average Latency (ms): %f\n", (float)w_ctx->stats.summed_latency/(float)w_ctx->stats.processed_output_tuples*0.001);
 	exit(0);
-
 }
-
-/**
- * Collect result tuples from all the workers.  This function is run
- * as its own thread.  It will spin and try to collect as many result
- * tuples from all the workers as it can.
- *
- * The function will serialize the result tuples to the output file
- * given on the command line (see master_ctx_t#outfile).  Also, the
- * function will report throughput statistics (i.e., result output
- * rates) approximately every second.
- *
- * @param arg a master context (signature of this function must match
- *            pthread_create(3).
- *
- * @return This function will never return.
- */
-static void *
-collect_results (void *arg)
-{
-	master_ctx_t    *ctx = (master_ctx_t *) arg;
-	result_msg_t     msg;
-	struct timespec  t_last;
-	struct timespec  t_now;
-	struct timespec  t_next;
-	unsigned int     n_last = 0;
-	unsigned int     n_now = 0;
-	unsigned int     msg_size;
-	unsigned int     num_result;
-
-	hj_gettime (&t_last);
-
-	t_next = t_last;
-
-	while (true)
-	{
-		t_next.tv_nsec += COLLECT_INTERVAL;
-
-		t_next.tv_sec  += t_next.tv_nsec / 1000000000L;
-		t_next.tv_nsec %= 1000000000L;
-
-		hj_nanosleep (&t_next);
-
-		/* consume results from all result queues */
-		while (! empty_ (ctx->result_queue))
-		{
-			msg_size = receive (ctx->result_queue, &msg);
-
-			/*
-			 * The message size tells us how many result tuples there
-			 * are encoded in the message.
-			 * See worker_ctx_t#partial_result_msg.
-			 */
-			//num_result = msg_size / sizeof (result_t);
-			n_now += msg_size / sizeof (result_t);
-
-			/*for (unsigned int j = 0; j < num_result; j++)
-			{
-				if (ctx->resultfile)
-				{
-					fprintf (ctx->resultfile,
-							"%4lu.%09lu | %8u | %8.2f | %20s || "
-							"%4lu.%09lu | %8u | %8.2f | %10.2f | %5s || "
-							"\n",
-							ctx->R.t[msg[j].r].tv_sec,
-							ctx->R.t[msg[j].r].tv_nsec,
-							ctx->R.x[msg[j].r], ctx->R.y[msg[j].r],
-							ctx->R.z[msg[j].r],
-							ctx->S.t[msg[j].s].tv_sec,
-							ctx->S.t[msg[j].s].tv_nsec,
-							ctx->S.a[msg[j].s], ctx->S.b[msg[j].s],
-							ctx->S.c[msg[j].s],
-							ctx->S.d[msg[j].s] ? "true" : "false"
-							);
-				}
-				n_now++;
-			}*/
-		}
-
-		/* check time stamp to report output data rate */
-		hj_gettime (&t_now);
-
-		/* report approximately every second */
-		if (t_now.tv_sec != t_last.tv_sec)
-		{
-			const double sec
-				= ((double) ((t_now.tv_sec * 1000000000L + t_now.tv_nsec)
-							- (t_last.tv_sec * 1000000000L + t_last.tv_nsec)))/1e9;
-
-			fprintf (stdout, "%u result tuples retrieved in %5.3f sec "
-					"(%6.2f tuples/sec)\n",
-					n_now - n_last, sec, ((double) (n_now - n_last)) / sec);
-
-			if (ctx->resultfile && n_last != n_now)
-				fflush (ctx->resultfile);
-
-			t_last = t_now;
-			n_last = n_now;
-		}
-
-	}
-
-	/* never reached */
-	return NULL;
-}
-
