@@ -30,7 +30,7 @@ void process_s_gpu (worker_ctx_t *w_ctx);
 void process_r_gpu (worker_ctx_t *w_ctx);
 void interprete_s (worker_ctx_t *w_ctx, int *bitmap);
 void interprete_r (worker_ctx_t *w_ctx, int *bitmap);
-//void expire_outdated_tuples (worker_ctx_t *w_ctx);
+void expire_outdated_tuples (worker_ctx_t *w_ctx);
 
 /*
  * woker
@@ -56,13 +56,12 @@ void *start_worker(void *ctx){
 		if (*(w_ctx->r_available) >= *(w_ctx->r_processed) + TUPLES_PER_CHUNK_R)
 		    process_r (w_ctx);
 
+		
 		/* process TUPLES_PER_CHUNK_S if there are that many tuples available */
 		if (*(w_ctx->s_available) >= *(w_ctx->s_processed) + TUPLES_PER_CHUNK_S)
 		    process_s (w_ctx);
 
-		/* check for tuple expiration TODO*/
-		/* TODO: Auf GPU? */
-		//expire_outdated_tuples (w_ctx);
+		expire_outdated_tuples (w_ctx);
 
 		/* Check if we are still in the process time window */
 		if (difftime( time(0), start) == w_ctx->process_window_time){
@@ -279,21 +278,21 @@ emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 }
 
 
-/*
 void
 expire_outdated_tuples (worker_ctx_t *w_ctx){
-    struct timespec t_rel;
+   	const int s_processed = *(w_ctx->s_processed);
+   	const int r_processed = *(w_ctx->r_processed);
+	struct timespec t_rel;
 
-    t_rel = w_ctx->S.t[s_first];
-    while (w_ctx->R.t[r_end].tv_sec*1000000000L + w_ctx->R.t[r_end].tv_nsec
-         + w_ctx->window_size_R * 1000000000L) < (t_rel.tv_sec * 1000000000L + t_rel.tv_nsec){
-	 w_ctx->r_end -= 1;
-    }
+	t_rel = w_ctx->S.t[s_processed];
+	while ((w_ctx->R.t[w_ctx->r_first].tv_sec*1000000000L + w_ctx->R.t[w_ctx->r_first].tv_nsec
+		+ w_ctx->window_size_R*1000000000L) < (t_rel.tv_sec*1000000000L + t_rel.tv_nsec)){
+		 w_ctx->r_first++;
+	}
 
-    t_rel = w_ctx->R.t[r_first];
-    while (w_ctx->S.t[r_end].tv_sec*1000000000L + w_ctx->S.t[r_end].tv_nsec
-         + w_ctx->window_size_S * 1000000000L) < (t_rel.tv_sec * 1000000000L + t_rel.tv_nsec){
-	 w_ctx->s_end -= 1;
-    }
+	t_rel = w_ctx->R.t[r_processed];
+	while ((w_ctx->S.t[w_ctx->s_first].tv_sec*1000000000L + w_ctx->S.t[w_ctx->s_first].tv_nsec
+		+ w_ctx->window_size_S*1000000000L) < (t_rel.tv_sec*1000000000L + t_rel.tv_nsec)){
+		 w_ctx->s_first++;
+	}
 }
-*/

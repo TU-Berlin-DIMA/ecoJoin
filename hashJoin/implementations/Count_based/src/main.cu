@@ -151,6 +151,8 @@ int main(int argc, char **argv) {
 	w_ctx->R.t = ctx->R.t;
 	w_ctx->num_tuples_S = ctx->num_tuples_S;
 	w_ctx->num_tuples_R = ctx->num_tuples_R;
+	w_ctx->window_size_S = ctx->window_size_S;
+	w_ctx->window_size_R = ctx->window_size_R;
 	w_ctx->r_first = 0;
 	w_ctx->s_first = 0;
 	w_ctx->r_processed = &(ctx->r_processed);
