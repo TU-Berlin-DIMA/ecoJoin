@@ -66,10 +66,10 @@ void *start_worker(void *ctx){
 
 		/* Check if we are still in the process time window */
 		if (difftime( time(0), start) == w_ctx->process_window_time){
-			start = time(0);
-
 			/* Start idle time window */
 			usleep(w_ctx->idle_window_time);
+
+			start = time(0);
 		}
 	}
 }
