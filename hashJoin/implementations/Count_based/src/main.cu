@@ -37,14 +37,15 @@ static void usage(){
 	printf ("  -w SIZE  window size for stream R (in seconds)\n");
 	printf ("  -W SIZE  window size for stream S (in seconds)\n");
 	printf ("  -p [cpu, gpu]  processing mode (cpu or gpu)\n");
-	printf ("  -s MSEC  idle window time\n");
-	printf ("  -S MSEC  process window time\n");
+	printf ("  -s SEC  idle window time\n");
+	printf ("  -S SEC  process window time\n");
 }
 
 int main(int argc, char **argv) {
 	master_ctx_t *ctx = (master_ctx_t *) malloc (sizeof (*ctx));
 	int ch;
 
+	/* Setup Master */
 	ctx->result_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH,0);
 	ctx->outfile = stdout;
 	ctx->logfile = stdout;
@@ -64,7 +65,8 @@ int main(int argc, char **argv) {
 	ctx->s_available = 0;
 	ctx->r_processed = 0;
 	ctx->s_processed = 0;
-
+	
+	
 	/* parse command lines */
 	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:")) != -1)
 	{
@@ -110,7 +112,7 @@ int main(int argc, char **argv) {
 					ctx->processing_mode = cpu_mode;
 				break;
 			case 's':
-				ctx->idle_window_time = strtol (optarg, NULL, 10);
+				ctx->idle_window_time = strtol (optarg, NULL, 10) * 1000000;
 				break;
 			case 'S':
 				ctx->process_window_time = strtol (optarg, NULL, 10);
@@ -135,11 +137,6 @@ int main(int argc, char **argv) {
 		fprintf (ctx->outfile, "# Stream will run for %f minutes\n",(float)ctx->num_tuples_R/(float)ctx->rate_R/60);
 	generate_data (ctx);
 	fprintf (ctx->outfile, "# Data generation done.\n");
-
-	if (ctx->processing_mode == cpu_mode)
-		fprintf (ctx->outfile, "# Use CPU processing mode\n");
-	else if (ctx->processing_mode == gpu_mode)
-		fprintf (ctx->outfile, "# Use GPU processing mode\n");
 	
 	/* Setup worker */
 	worker_ctx_t *w_ctx = (worker_ctx_t *) malloc (sizeof (*w_ctx));
@@ -152,6 +149,8 @@ int main(int argc, char **argv) {
 	w_ctx->R.x = ctx->R.x;
 	w_ctx->R.y = ctx->R.y;
 	w_ctx->R.t = ctx->R.t;
+	w_ctx->num_tuples_S = ctx->num_tuples_S;
+	w_ctx->num_tuples_R = ctx->num_tuples_R;
 	w_ctx->r_first = 0;
 	w_ctx->s_first = 0;
 	w_ctx->r_processed = &(ctx->r_processed);
@@ -160,12 +159,18 @@ int main(int argc, char **argv) {
 	w_ctx->s_available = &(ctx->s_available);
 	w_ctx->data_cv = &(ctx->data_cv);
 	w_ctx->data_mutex = &(ctx->data_mutex);
-	/* Statistics*/
+		
+	/* Setup statistics*/
 	w_ctx->stats.processed_output_tuples = 0;
 	w_ctx->stats.summed_latency = 0;
 	w_ctx->stats.start_time = (struct timespec) { .tv_sec  = 0, .tv_nsec = 0 };
 
-	printf ("#\n");
+
+	if (ctx->processing_mode == cpu_mode)
+		fprintf (ctx->outfile, "# Use CPU processing mode\n\n");
+	else if (ctx->processing_mode == gpu_mode)
+		fprintf (ctx->outfile, "# Use GPU processing mode\n\n");
+
 	fprintf (ctx->outfile, "# Start Stream\n");
 	std::thread first (start_stream, ctx, w_ctx);
 

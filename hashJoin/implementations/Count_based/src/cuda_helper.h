@@ -40,10 +40,10 @@
 
 #define START_M(name) start_name = std::chrono::steady_clock::now();
 
-#define END_M(name)                                                                                      \
-		end_name = std::chrono::steady_clock::now();                                                     \
-		int elapsed_seconds_name =                                                                       \
-			std::chrono::duration_cast<std::chrono::milliseconds>(end_name - start_name).count();        \	
+#define END_M(name)                                                                                           \
+		end_name = std::chrono::steady_clock::now();                                                  \
+		int elapsed_seconds_name =                                                                    \
+			std::chrono::duration_cast<std::chrono::milliseconds>(end_name - start_name).count(); \
 			std::cout << "elapsed time: " << elapsed_seconds_name << "ms\n";
 
 #define END_MEASURE(N) \

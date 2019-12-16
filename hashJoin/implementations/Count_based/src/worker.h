@@ -77,12 +77,21 @@ struct worker_ctx_t {
      */
     processing_mode_e processing_mode;
 
+    /* Pointer to the Buffer that the gpu uses to write to */
+    int *gpu_output_buffer;
 
     /** window size for R (in sec) **/
     unsigned window_size_R;
 
     /** window size for S (in sec) **/
     unsigned window_size_S;
+
+
+    /** number of tuples in S (in sec) **/
+    unsigned num_tuples_S;
+    
+    /** number of tuples in R (in sec) **/
+    unsigned num_tuples_R;
 
     /* time to sleep after processing */
     unsigned idle_window_time;

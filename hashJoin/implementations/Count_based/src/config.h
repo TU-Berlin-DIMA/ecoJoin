@@ -4,6 +4,9 @@
 /* Size of a cache line in bytes. */
 #define CACHELINESIZE 64
 
+/* Join Hit Rate: 1 / TPL_PER_HIT */
+#define TPL_PER_HIT 250000
+
 /* Define if you want to enable SIMD acceleration */
 /* #undef ENABLE_SIMD */
 

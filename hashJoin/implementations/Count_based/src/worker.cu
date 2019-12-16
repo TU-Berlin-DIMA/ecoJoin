@@ -8,6 +8,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <sys/time.h>
+#include <bitset>
 
 #include "data.h"
 #include "master.h"
@@ -20,13 +21,15 @@
 /* --- forward declarations --- */
 static inline void emit_result (worker_ctx_t *ctx, unsigned int r,
                                 unsigned int s);
-static inline void flush_result (worker_ctx_t *ctx);	
+void init_worker(worker_ctx_t *w_ctx);
 void process_s (worker_ctx_t *w_ctx);
 void process_r (worker_ctx_t *w_ctx);
 void process_s_cpu (worker_ctx_t *w_ctx);
 void process_r_cpu (worker_ctx_t *w_ctx);
 void process_s_gpu (worker_ctx_t *w_ctx);
 void process_r_gpu (worker_ctx_t *w_ctx);
+void interprete_s (worker_ctx_t *w_ctx, int *bitmap);
+void interprete_r (worker_ctx_t *w_ctx, int *bitmap);
 //void expire_outdated_tuples (worker_ctx_t *w_ctx);
 
 /*
@@ -35,9 +38,11 @@ void process_r_gpu (worker_ctx_t *w_ctx);
 void *start_worker(void *ctx){
 	worker_ctx_t *w_ctx = (worker_ctx_t *) ctx;
 	
-	 time_t start = time(0);
-	 while (true)
-   	 {
+	init_worker(w_ctx);
+
+	time_t start = time(0);
+	while (true)
+   	{
 		/* Wait until main releases the lock and enough data arrived
 		 * Using conditional variables we avoid busy waiting
 		 */
@@ -67,7 +72,6 @@ void *start_worker(void *ctx){
 			usleep(w_ctx->idle_window_time);
 		}
 	}
-	return;
 }
 
 void process_s (worker_ctx_t *w_ctx){
@@ -86,74 +90,126 @@ void process_r (worker_ctx_t *w_ctx){
 	}
 }
 
-/* Process TUPLES_PER_CHUNK_S Tuples on the gpu with nested loop join*/
+void init_worker (worker_ctx_t *w_ctx){
+
+	/* Allocate output buffer */
+	if (w_ctx->processing_mode == gpu_mode){
+		
+		unsigned buffer_size;
+
+		// Estimated maximal buffersize
+		if (TUPLES_PER_CHUNK_S > TUPLES_PER_CHUNK_R)
+			buffer_size = w_ctx->num_tuples_R * TUPLES_PER_CHUNK_S;
+		else
+			buffer_size = w_ctx->num_tuples_S * TUPLES_PER_CHUNK_R;
+		
+		CUDA_SAFE(cudaHostAlloc((void**)&(w_ctx->gpu_output_buffer), buffer_size, 0));
+		std::memset(w_ctx->gpu_output_buffer, 0, buffer_size);
+	}
+}
+
+/* Process TUPLES_PER_CHUNK_S Tuples on the gpu with nested loop join
+ * Similar to HELLS JOIN
+ */
 void process_s_gpu (worker_ctx_t *w_ctx){
-	int  *output_buffer;
+    	const unsigned s_processed = *(w_ctx->s_processed);
+    	const unsigned r_first = w_ctx->r_first;
+    	const unsigned r_processed = *(w_ctx->r_processed);
+    	
+	//assert (s_processed - *(w_ctx->s_available)) >= TUPLES_PER_CHUNK_S);
 
-    	assert ((*(w_ctx->s_processed) - *(w_ctx->s_available)) >= TUPLES_PER_CHUNK_S);
-
-	if ((*(w_ctx->r_processed) - w_ctx->r_first) > 0){
-		/* Allocate Memory */
-		// TODO: Worst case buffer Schlechteste Match rate
-		CUDA_SAFE(cudaHostAlloc((void**)&output_buffer, (*(w_ctx->r_processed) - w_ctx->r_first) * TUPLES_PER_CHUNK_S * sizeof(int),0));
-		std::memset(output_buffer, 0,  (*(w_ctx->r_processed) - w_ctx->r_first) * TUPLES_PER_CHUNK_S * sizeof(int));
-
+	if (r_processed - r_first > 0){
+		
 		/* Start kernel */
-		compare_kernel_new_s<<<1,GPU_THREAD_NUM>>>(output_buffer, 
-				w_ctx->S.a, w_ctx->S.b, w_ctx->R.x, w_ctx->R.y, 
-				*(w_ctx->s_processed), *(w_ctx->s_processed) + TUPLES_PER_CHUNK_S, 
-				w_ctx->r_first, *(w_ctx->r_processed));
+		compare_kernel_new_s<<<1,GPU_THREAD_NUM>>>(w_ctx->gpu_output_buffer, 
+				&(w_ctx->S.a[s_processed]), &(w_ctx->S.b[s_processed]), 
+				&(w_ctx->R.x[r_first]), &(w_ctx->R.y[r_first]), 
+				TUPLES_PER_CHUNK_S, 
+				r_processed - r_first);
+
 		CUDA_SAFE(cudaDeviceSynchronize());
 
-		/* Emit result tuple */
-		for(int r = 0; r < (*(w_ctx->r_processed) - w_ctx->r_first); r++){
-			if (output_buffer[r] != 0)
-				emit_result (w_ctx, r + w_ctx->r_first, 
-						output_buffer[r] + w_ctx->s_first);
-		}
-		
-		/* Free Memory */
-		CUDA_SAFE(cudaFreeHost(output_buffer));
+		interprete_s(w_ctx, w_ctx->gpu_output_buffer);
 	}
 
-	/* Update processed tuples */
+	/* Update processed tuples index */
 	*(w_ctx->s_processed) += TUPLES_PER_CHUNK_S;
 
 }
 
 /* Process TUPLES_PER_CHUNK_R Tuples on the gpu with nested loop join
+ * Similar to HELLS JOIN
  */
 void process_r_gpu (worker_ctx_t *w_ctx){
-	int  *output_buffer;
+    	const unsigned r_processed = *(w_ctx->r_processed);
+    	const unsigned s_first = w_ctx->s_first;
+    	const unsigned s_processed = *(w_ctx->s_processed);
+    	
+	//assert (s_processed - *(w_ctx->s_available)) >= TUPLES_PER_CHUNK_S);
 
-    	assert ((*(w_ctx->r_processed) - *(w_ctx->r_available)) >= TUPLES_PER_CHUNK_R);
-
-	if ((*(w_ctx->r_processed) - w_ctx->r_first) > 0){
-		/* Allocate Memory */
-		CUDA_SAFE(cudaHostAlloc((void**)&output_buffer, (*(w_ctx->r_processed) - w_ctx->r_first)*sizeof(int),0));
-		std::memset(output_buffer, 0,  (*(w_ctx->r_processed) - w_ctx->r_first)*sizeof(int));
-
+	if (s_processed - s_first > 0){
+		
 		/* Start kernel */
-		compare_kernel_new_s<<<1,GPU_THREAD_NUM>>>(output_buffer, 
-				w_ctx->S.a, w_ctx->S.b, w_ctx->R.x, w_ctx->R.y, 
-				w_ctx->s_first, *(w_ctx->s_processed), 
-				*(w_ctx->r_processed), *(w_ctx->r_processed) +  TUPLES_PER_CHUNK_R);
+		compare_kernel_new_r<<<1,GPU_THREAD_NUM>>>(w_ctx->gpu_output_buffer, 
+				&(w_ctx->S.a[s_first]), &(w_ctx->S.b[s_first]), 
+				&(w_ctx->R.x[r_processed]), &(w_ctx->R.y[r_processed]), 
+				s_processed - s_first,
+				TUPLES_PER_CHUNK_R);
+
 		CUDA_SAFE(cudaDeviceSynchronize());
 
-		/* Emit result tuple */
-		for(int r = 0; r < (*(w_ctx->r_processed) - w_ctx->r_first); r++){
-			if (output_buffer[r] != 0)
-				emit_result (w_ctx, r + w_ctx->r_first, 
-						output_buffer[r] + w_ctx->s_first);
-		}
-		
-		/* Free Memory */
-		CUDA_SAFE(cudaFreeHost(output_buffer));
+		interprete_r(w_ctx, w_ctx->gpu_output_buffer);
 	}
 
-	/* Update processed tuples */
+	/* Update processed tuples index */
 	*(w_ctx->r_processed) += TUPLES_PER_CHUNK_R;
 
+}
+
+void interprete_s(worker_ctx_t *w_ctx, int *bitmap) {
+	const int r_processed = *(w_ctx->s_processed);
+	const int s_processed = *(w_ctx->s_processed);
+	const int i = TUPLES_PER_CHUNK_S * ((*(w_ctx->r_processed)) - w_ctx->r_first) / 32;
+        for (int z = 0; z < i; z++) {
+		/* Is there even a result in this int */
+                if (bitmap[z] == 0) {
+                        continue;
+                } else {
+#pragma unroll
+                        for (int k = 0; k < 32; k++){
+				/* Check inside of int */
+                                if (std::bitset<32>(bitmap[z]).test(k)) { 
+					const int s = (z/(r_processed/32));
+					const int r = (z - s*(r_processed/32))*32+k;
+					emit_result(w_ctx, r, s+s_processed);
+                                }
+                        }
+                        bitmap[z] = 0;
+                }
+    	}
+}
+
+void interprete_r(worker_ctx_t *w_ctx, int *bitmap) {
+	const int s_processed = *(w_ctx->s_processed);
+	const int r_processed = *(w_ctx->r_processed);
+	const int i = TUPLES_PER_CHUNK_R * ((*(w_ctx->s_processed)) - w_ctx->s_first) / 32;
+        for (int z = 0; z < i; z++) {
+		/* Is there even a result in this int */
+                if (bitmap[z] == 0) {
+                        continue;
+                } else {
+#pragma unroll
+                        for (int k = 0; k < 32; k++){
+				/* Check inside of int */
+                                if (std::bitset<32>(bitmap[z]).test(k)) { 
+					const int r = (z/(s_processed/32));
+					const int s = (z - r*(s_processed/32))*32+k;
+					emit_result(w_ctx, r+r_processed, s);
+                                }
+                        }
+                        bitmap[z] = 0;
+                }
+    	}
 }
 
 /* Process TUPLES_PER_CHUNK_S Tuples on the cpu with nested loop join*/
