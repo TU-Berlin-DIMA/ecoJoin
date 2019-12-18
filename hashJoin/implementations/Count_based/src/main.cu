@@ -203,7 +203,7 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 
 	if (hj_gettime (&t_start))
 	{
-		fprintf (stderr,
+		 fprintf (stderr,
 			 "Something went wrong with the real time interface.\n");
 		 fprintf (stderr, "A call to hj_gettime() failed.\n");
 		 exit (EXIT_FAILURE);
@@ -265,12 +265,14 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 			}
 		}
 	}
-	printf("# End of stream\n\n");
+	fprintf (ctx->outfile, "# End of Stream\n\n");
 
 	fprintf (ctx->outfile, "# Output Tuples       : %u\n", w_ctx->stats.processed_output_tuples);
 	fprintf (ctx->outfile, "# Throughput (tuple/s): %f\n", w_ctx->stats.processed_output_tuples/((float)ctx->num_tuples_R/(float)ctx->rate_R));
 	fprintf (ctx->outfile, "# Average Latency (ms): %f\n", (float)w_ctx->stats.summed_latency/(float)w_ctx->stats.processed_output_tuples*0.001);
 	fprintf (ctx->outfile, "# Processed Index     : r %u s %u\n", ctx->r_processed, ctx->s_processed);
 	fprintf (ctx->outfile, "# Available Index     : r %u s %u\n", ctx->r_available, ctx->s_available);
+
+	fprintf (ctx->resultfile, "%u, %f, %f, %u, %u\n", w_ctx->stats.processed_output_tuples, w_ctx->stats.processed_output_tuples/((float)ctx->num_tuples_R/(float)ctx->rate_R), (float)w_ctx->stats.summed_latency/(float)w_ctx->stats.processed_output_tuples*0.001, ctx->r_available - ctx->r_processed, ctx->s_available - ctx->s_processed);
 	exit(0);
 }
