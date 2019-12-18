@@ -17,21 +17,31 @@ print("Connecting..")
 socket = context.socket(zmq.REQ)
 socket.connect("tcp://" + ip +":5555")
 
-# Start 
-p = subprocess.Popen([prog + " >> /tmp/measure.txt"], stdout=subprocess.PIPE,shell=True, preexec_fn=os.setsid)
-print(p.pid)
 print("Sending request..")
 socket.send(b"Hello")
 
-#  Get the reply.
-print("Waiting for stop signal")
-message = socket.recv()
 
-print("Kill measure")
-os.killpg(p.pid, signal.SIGTERM)
+while(True):
+     #  Get the reply.
+    print("Waiting for start signal")
+    message = socket.recv()
 
-f = open("/tmp/measure.txt",'rb')
-fl = f.read()
-if fl:
-    socket.send(fl)
-print("measure sended")
+    if (message == "Start"):
+        p = subprocess.Popen([prog + " > /tmp/measure.txt"], stdout=subprocess.PIPE,shell=True, preexec_fn=os.setsid)
+
+        socket.send(b"Started")
+
+        #  Get the reply.
+        print("Waiting for stop signal")
+        message = socket.recv()
+
+        print("Kill measure")
+        os.killpg(p.pid, signal.SIGTERM)
+
+        f = open("/tmp/measure.txt",'rb')
+        fl = f.read()
+        if fl:
+            socket.send(fl)
+        print("measure sended")
+    else:
+        break
