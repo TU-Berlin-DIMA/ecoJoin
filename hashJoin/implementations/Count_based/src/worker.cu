@@ -100,9 +100,9 @@ void init_worker (worker_ctx_t *w_ctx){
 
 		// Estimated maximal buffersize
 		if (w_ctx->s_batch_size > w_ctx->r_batch_size )
-			buffer_size = w_ctx->num_tuples_R * w_ctx->r_batch_size;
+			buffer_size = w_ctx->num_tuples_R * w_ctx->s_batch_size;
 		else
-			buffer_size = w_ctx->num_tuples_S * w_ctx->s_batch_size;
+			buffer_size = w_ctx->num_tuples_S * w_ctx->r_batch_size;
 		
 		CUDA_SAFE(cudaHostAlloc((void**)&(w_ctx->gpu_output_buffer), buffer_size, 0));
 		std::memset(w_ctx->gpu_output_buffer, 0, buffer_size);
@@ -150,6 +150,7 @@ void process_r_gpu (worker_ctx_t *w_ctx){
 
 	if (s_processed - s_first > 0){
 		
+		std::cout << w_ctx->gpu_gridsize << w_ctx->gpu_blocksize << "\n";
 		/* Start kernel */
 		compare_kernel_new_r<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(w_ctx->gpu_output_buffer, 
 				&(w_ctx->S.a[s_first]), &(w_ctx->S.b[s_first]), 
@@ -169,7 +170,7 @@ void process_r_gpu (worker_ctx_t *w_ctx){
 
 void interprete_s(worker_ctx_t *w_ctx, int *bitmap) {
 	const int r_processed = *(w_ctx->s_processed);
-	const int s_processed = *(w_ctx->s_processed);
+	const int s_processed = *(w_ctx->r_processed);
 	const int i = w_ctx->r_batch_size * ((*(w_ctx->r_processed)) - w_ctx->r_first) / 32;
         for (int z = 0; z < i; z++) {
 		/* Is there even a result in this int */
