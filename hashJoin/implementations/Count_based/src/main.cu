@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
 	
 	
 	/* parse command lines */
-	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:T:t:B:b")) != -1)
+	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:T:t:B:b:g:G:")) != -1)
 	{
 		switch (ch)
 		{
@@ -142,10 +142,10 @@ int main(int argc, char **argv) {
 				ctx->s_batch_size = strtol (optarg, NULL,10);
 				break;
 			case 'g':
-				ctx->gpu_gridsize = strtol (optarg, NULL,10);
+				ctx->gpu_gridsize = (unsigned)atoi(optarg);
 				break;
 			case 'G':
-				ctx->gpu_blocksize = strtol (optarg, NULL,10);
+				ctx->gpu_blocksize = (unsigned)atoi(optarg);;
 				break;
 			case 'h':
 			case '?':
