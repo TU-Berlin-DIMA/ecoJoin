@@ -39,6 +39,9 @@ static void usage(){
 	printf ("  -p [cpu, gpu]  processing mode (cpu or gpu)\n");
 	printf ("  -s SEC  idle window time\n");
 	printf ("  -S SEC  process window time\n");
+	printf ("  -T enable sleep time window\n");
+	printf ("  -t sleep control in worker\n");
+	
 }
 
 int main(int argc, char **argv) {
@@ -65,10 +68,14 @@ int main(int argc, char **argv) {
 	ctx->s_available = 0;
 	ctx->r_processed = 0;
 	ctx->s_processed = 0;
+	ctx->r_batch_size = 64;
+	ctx->s_batch_size = 64;
+	ctx->time_sleep = true;
+        ctx->time_sleep_control_in_worker = true;
 	
 	
 	/* parse command lines */
-	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:")) != -1)
+	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:T:t:B:b")) != -1)
 	{
 		switch (ch)
 		{
@@ -117,7 +124,18 @@ int main(int argc, char **argv) {
 			case 'S':
 				ctx->process_window_time = strtol (optarg, NULL, 10);
 				break;
-
+			case 'T':
+				ctx->time_sleep = false;
+				break;
+			case 't':
+				ctx->time_sleep_control_in_worker = false;
+				break;
+			case 'b':
+				ctx->r_batch_size = strtol (optarg, NULL,10);
+				break;
+			case 'B':
+				ctx->s_batch_size = strtol (optarg, NULL,10);
+				break;
 			case 'h':
 			case '?':
 			default:
@@ -161,6 +179,10 @@ int main(int argc, char **argv) {
 	w_ctx->s_available = &(ctx->s_available);
 	w_ctx->data_cv = &(ctx->data_cv);
 	w_ctx->data_mutex = &(ctx->data_mutex);
+	w_ctx->time_sleep = ctx->time_sleep;
+	w_ctx->time_sleep_control_in_worker = ctx->time_sleep_control_in_worker;
+	w_ctx->r_batch_size = ctx->r_batch_size;
+	w_ctx->s_batch_size = ctx->s_batch_size;
 		
 	/* Setup statistics*/
 	w_ctx->stats.processed_output_tuples = 0;
@@ -213,6 +235,9 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	t_start.tv_sec += 5;
 	t_offset = t_start.tv_sec;
 	w_ctx->stats.start_time =  (struct timespec) { .tv_sec  = t_offset, .tv_nsec = 0 };
+	
+	/* time used for Process / Idle window control */
+        time_t start = time(0);
 
 	while (ctx->r_available < ctx->num_tuples_R || ctx->s_available < ctx->num_tuples_S) {
 
@@ -253,15 +278,26 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 			 *  TUPLES_PER_CHUNK_R <= Throughput
 			 */ 
 			/* Notify condition */
-			if (MAIN_PROCESSING_LOCK && ctx->r_available >= ctx->r_processed + TUPLES_PER_CHUNK_R){
+			if (MAIN_PROCESSING_LOCK && ctx->r_available >= ctx->r_processed + ctx->r_batch_size){
 				ctx->data_cv.notify_one();
 			}
 		} else {
 			ctx->s_available++;
 
 			/* Notify condition */
-			if (MAIN_PROCESSING_LOCK && ctx->s_available >= ctx->s_processed + TUPLES_PER_CHUNK_S){
+			if (MAIN_PROCESSING_LOCK && ctx->s_available >= ctx->s_processed + ctx->s_batch_size){
 				ctx->data_cv.notify_one();
+			}
+		}
+
+
+		if (ctx->time_sleep && !ctx->time_sleep_control_in_worker) {
+			/* Check if we are still in the process time window */
+			if (difftime( time(0), start) == ctx->process_window_time){
+				/* Start idle time window */
+				usleep(ctx->idle_window_time);
+
+				start = time(0);
 			}
 		}
 	}
@@ -272,7 +308,8 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	fprintf (ctx->outfile, "# Average Latency (ms): %f\n", (float)w_ctx->stats.summed_latency/(float)w_ctx->stats.processed_output_tuples*0.001);
 	fprintf (ctx->outfile, "# Processed Index     : r %u s %u\n", ctx->r_processed, ctx->s_processed);
 	fprintf (ctx->outfile, "# Available Index     : r %u s %u\n", ctx->r_available, ctx->s_available);
-
+	
+	// Processed Tuples, Throughput, Latency, #Processed R, #Processed S
 	fprintf (ctx->resultfile, "%u, %f, %f, %u, %u\n", w_ctx->stats.processed_output_tuples, w_ctx->stats.processed_output_tuples/((float)ctx->num_tuples_R/(float)ctx->rate_R), (float)w_ctx->stats.summed_latency/(float)w_ctx->stats.processed_output_tuples*0.001, ctx->r_available - ctx->r_processed, ctx->s_available - ctx->s_processed);
 	exit(0);
 }

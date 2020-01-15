@@ -96,6 +96,18 @@ struct worker_ctx_t {
     /* time to sleep after processing */
     unsigned idle_window_time;
     unsigned process_window_time;
+
+    /* enbable time sleep */
+    bool time_sleep;
+
+    /* manage time sleep in worker*/ 
+    bool time_sleep_control_in_worker;
+
+    /* batch processing size in tuples */
+    unsigned s_batch_size;
+
+    /* batch processing size in tuples */
+    unsigned r_batch_size;
 };
 
 

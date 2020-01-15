@@ -48,27 +48,29 @@ void *start_worker(void *ctx){
 		 */
 		if (MAIN_PROCESSING_LOCK){
 			std::unique_lock<std::mutex> lk(*(w_ctx->data_mutex));
-			w_ctx->data_cv->wait(lk, [&](){return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + TUPLES_PER_CHUNK_R)
-				   || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + TUPLES_PER_CHUNK_S);});
+			w_ctx->data_cv->wait(lk, [&](){return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
+				   || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size);});
 		}
 		
 		/* process TUPLES_PER_CHUNK_R if there are that many tuples available */
-		if (*(w_ctx->r_available) >= *(w_ctx->r_processed) + TUPLES_PER_CHUNK_R)
+		if (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
 		    process_r (w_ctx);
 
 		
 		/* process TUPLES_PER_CHUNK_S if there are that many tuples available */
-		if (*(w_ctx->s_available) >= *(w_ctx->s_processed) + TUPLES_PER_CHUNK_S)
+		if (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size)
 		    process_s (w_ctx);
 
 		expire_outdated_tuples (w_ctx);
 
-		/* Check if we are still in the process time window */
-		if (difftime( time(0), start) == w_ctx->process_window_time){
-			/* Start idle time window */
-			usleep(w_ctx->idle_window_time);
+		if (w_ctx->time_sleep_control_in_worker && w_ctx->time_sleep) {
+			/* Check if we are still in the process time window */
+			if (difftime( time(0), start) == w_ctx->process_window_time){
+				/* Start idle time window */
+				usleep(w_ctx->idle_window_time);
 
-			start = time(0);
+				start = time(0);
+			}
 		}
 	}
 }
@@ -97,10 +99,10 @@ void init_worker (worker_ctx_t *w_ctx){
 		unsigned buffer_size;
 
 		// Estimated maximal buffersize
-		if (TUPLES_PER_CHUNK_S > TUPLES_PER_CHUNK_R)
-			buffer_size = w_ctx->num_tuples_R * TUPLES_PER_CHUNK_S;
+		if (w_ctx->s_batch_size > w_ctx->r_batch_size )
+			buffer_size = w_ctx->num_tuples_R * w_ctx->r_batch_size;
 		else
-			buffer_size = w_ctx->num_tuples_S * TUPLES_PER_CHUNK_R;
+			buffer_size = w_ctx->num_tuples_S * w_ctx->s_batch_size;
 		
 		CUDA_SAFE(cudaHostAlloc((void**)&(w_ctx->gpu_output_buffer), buffer_size, 0));
 		std::memset(w_ctx->gpu_output_buffer, 0, buffer_size);
@@ -123,7 +125,7 @@ void process_s_gpu (worker_ctx_t *w_ctx){
 		compare_kernel_new_s<<<1,GPU_THREAD_NUM>>>(w_ctx->gpu_output_buffer, 
 				&(w_ctx->S.a[s_processed]), &(w_ctx->S.b[s_processed]), 
 				&(w_ctx->R.x[r_first]), &(w_ctx->R.y[r_first]), 
-				TUPLES_PER_CHUNK_S, 
+				w_ctx->s_batch_size,
 				r_processed - r_first);
 
 		CUDA_SAFE(cudaDeviceSynchronize());
@@ -132,7 +134,7 @@ void process_s_gpu (worker_ctx_t *w_ctx){
 	}
 
 	/* Update processed tuples index */
-	*(w_ctx->s_processed) += TUPLES_PER_CHUNK_S;
+	*(w_ctx->s_processed) += w_ctx->s_batch_size;
 
 }
 
@@ -153,7 +155,7 @@ void process_r_gpu (worker_ctx_t *w_ctx){
 				&(w_ctx->S.a[s_first]), &(w_ctx->S.b[s_first]), 
 				&(w_ctx->R.x[r_processed]), &(w_ctx->R.y[r_processed]), 
 				s_processed - s_first,
-				TUPLES_PER_CHUNK_R);
+				w_ctx->r_batch_size);
 
 		CUDA_SAFE(cudaDeviceSynchronize());
 
@@ -161,14 +163,14 @@ void process_r_gpu (worker_ctx_t *w_ctx){
 	}
 
 	/* Update processed tuples index */
-	*(w_ctx->r_processed) += TUPLES_PER_CHUNK_R;
+	*(w_ctx->r_processed) += w_ctx->r_batch_size;
 
 }
 
 void interprete_s(worker_ctx_t *w_ctx, int *bitmap) {
 	const int r_processed = *(w_ctx->s_processed);
 	const int s_processed = *(w_ctx->s_processed);
-	const int i = TUPLES_PER_CHUNK_S * ((*(w_ctx->r_processed)) - w_ctx->r_first) / 32;
+	const int i = w_ctx->r_batch_size * ((*(w_ctx->r_processed)) - w_ctx->r_first) / 32;
         for (int z = 0; z < i; z++) {
 		/* Is there even a result in this int */
                 if (bitmap[z] == 0) {
@@ -191,7 +193,7 @@ void interprete_s(worker_ctx_t *w_ctx, int *bitmap) {
 void interprete_r(worker_ctx_t *w_ctx, int *bitmap) {
 	const int s_processed = *(w_ctx->s_processed);
 	const int r_processed = *(w_ctx->r_processed);
-	const int i = TUPLES_PER_CHUNK_R * ((*(w_ctx->s_processed)) - w_ctx->s_first) / 32;
+	const int i = w_ctx->s_batch_size * ((*(w_ctx->s_processed)) - w_ctx->s_first) / 32;
         for (int z = 0; z < i; z++) {
 		/* Is there even a result in this int */
                 if (bitmap[z] == 0) {
@@ -216,7 +218,7 @@ void process_s_cpu (worker_ctx_t *w_ctx){
 
 	for (unsigned int r = w_ctx->r_first; r < *(w_ctx->r_processed); r++)
 	{
-		for (unsigned int s = *(w_ctx->s_processed); s < *(w_ctx->s_processed) + TUPLES_PER_CHUNK_S;
+		for (unsigned int s = *(w_ctx->s_processed); s < *(w_ctx->s_processed) + w_ctx->s_batch_size;
 		    s++)
 		{
 			const a_t a = w_ctx->S.a[s] - w_ctx->R.x[r];
@@ -226,7 +228,7 @@ void process_s_cpu (worker_ctx_t *w_ctx){
 		}
 	}
 
-	*(w_ctx->s_processed) += TUPLES_PER_CHUNK_S;
+	*(w_ctx->s_processed) += w_ctx->s_batch_size;
 }
 
 /* Process TUPLES_PER_CHUNK_R Tuples on the cpu with nested loop join*/
@@ -235,7 +237,7 @@ void process_r_cpu (worker_ctx_t *w_ctx){
 	for (unsigned int s = w_ctx->s_first; s < *(w_ctx->s_processed); s++)
         {
 		for (unsigned int r = *(w_ctx->r_processed); 
-				r < *(w_ctx->r_processed) + TUPLES_PER_CHUNK_R;
+				r < *(w_ctx->r_processed) + w_ctx->r_batch_size;
 		   		r++)
 		{
 			const a_t a = w_ctx->S.a[s] - w_ctx->R.x[r];
@@ -245,7 +247,7 @@ void process_r_cpu (worker_ctx_t *w_ctx){
 		}
 	}
 	
-	*(w_ctx->r_processed) += TUPLES_PER_CHUNK_R;
+	*(w_ctx->r_processed) += w_ctx->r_batch_size;
 }
 
 /*

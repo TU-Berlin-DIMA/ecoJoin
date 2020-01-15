@@ -104,6 +104,19 @@ struct master_ctx_t {
     //       unsigned int   pos;   /**< number of tuples already in the message */
     //       result_msg_t   msg;   /**< the partial message itself */
     //} partial_result_msg;
+    
+      /* enbable time sleep */
+      bool time_sleep;
+
+      /* manage time sleep in worker*/
+      bool time_sleep_control_in_worker;
+
+
+      /* batch processing size in tuples */
+      unsigned r_batch_size;
+      
+      /* batch processing size in tuples */
+      unsigned s_batch_size;
 };
 typedef struct master_ctx_t master_ctx_t;
 
