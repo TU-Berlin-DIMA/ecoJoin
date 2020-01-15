@@ -122,7 +122,7 @@ void process_s_gpu (worker_ctx_t *w_ctx){
 	if (r_processed - r_first > 0){
 		
 		/* Start kernel */
-		compare_kernel_new_s<<<1,GPU_THREAD_NUM>>>(w_ctx->gpu_output_buffer, 
+		compare_kernel_new_s<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(w_ctx->gpu_output_buffer, 
 				&(w_ctx->S.a[s_processed]), &(w_ctx->S.b[s_processed]), 
 				&(w_ctx->R.x[r_first]), &(w_ctx->R.y[r_first]), 
 				w_ctx->s_batch_size,
@@ -151,7 +151,7 @@ void process_r_gpu (worker_ctx_t *w_ctx){
 	if (s_processed - s_first > 0){
 		
 		/* Start kernel */
-		compare_kernel_new_r<<<1,GPU_THREAD_NUM>>>(w_ctx->gpu_output_buffer, 
+		compare_kernel_new_r<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(w_ctx->gpu_output_buffer, 
 				&(w_ctx->S.a[s_first]), &(w_ctx->S.b[s_first]), 
 				&(w_ctx->R.x[r_processed]), &(w_ctx->R.y[r_processed]), 
 				s_processed - s_first,

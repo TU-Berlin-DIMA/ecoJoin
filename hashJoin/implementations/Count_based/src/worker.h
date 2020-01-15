@@ -108,6 +108,10 @@ struct worker_ctx_t {
 
     /* batch processing size in tuples */
     unsigned r_batch_size;
+
+    /* GPU parameter */
+    unsigned gpu_gridsize;
+    unsigned gpu_blocksize;
 };
 
 

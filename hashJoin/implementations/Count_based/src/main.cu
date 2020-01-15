@@ -41,7 +41,10 @@ static void usage(){
 	printf ("  -S SEC  process window time\n");
 	printf ("  -T enable sleep time window\n");
 	printf ("  -t sleep control in worker\n");
-	
+	printf ("  -b NUM  batchsize for stream R\n");
+	printf ("  -B NUM  batchsize for stream S\n");
+	printf ("  -g NUM  GPU gridsize\n");
+	printf ("  -G NUM  GPU blocksize\n");
 }
 
 int main(int argc, char **argv) {
@@ -72,6 +75,8 @@ int main(int argc, char **argv) {
 	ctx->s_batch_size = 64;
 	ctx->time_sleep = true;
         ctx->time_sleep_control_in_worker = true;
+        ctx->gpu_gridsize = 1;
+        ctx->gpu_blocksize = 128;
 	
 	
 	/* parse command lines */
@@ -136,6 +141,12 @@ int main(int argc, char **argv) {
 			case 'B':
 				ctx->s_batch_size = strtol (optarg, NULL,10);
 				break;
+			case 'g':
+				ctx->gpu_gridsize = strtol (optarg, NULL,10);
+				break;
+			case 'G':
+				ctx->gpu_blocksize = strtol (optarg, NULL,10);
+				break;
 			case 'h':
 			case '?':
 			default:
@@ -183,6 +194,8 @@ int main(int argc, char **argv) {
 	w_ctx->time_sleep_control_in_worker = ctx->time_sleep_control_in_worker;
 	w_ctx->r_batch_size = ctx->r_batch_size;
 	w_ctx->s_batch_size = ctx->s_batch_size;
+	w_ctx->gpu_gridsize = ctx->gpu_gridsize;
+	w_ctx->gpu_blocksize = ctx->gpu_blocksize;
 		
 	/* Setup statistics*/
 	w_ctx->stats.processed_output_tuples = 0;

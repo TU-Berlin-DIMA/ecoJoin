@@ -117,6 +117,10 @@ struct master_ctx_t {
       
       /* batch processing size in tuples */
       unsigned s_batch_size;
+      
+      /* GPU parameter */
+      unsigned gpu_gridsize;
+      unsigned gpu_blocksize;
 };
 typedef struct master_ctx_t master_ctx_t;
 

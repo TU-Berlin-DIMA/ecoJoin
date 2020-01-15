@@ -1,10 +1,10 @@
 // Number of tuples processed per send Message for Stream R
-#define TUPLES_PER_CHUNK_R 64
+//#define TUPLES_PER_CHUNK_R 64
 // Number of tuples processed per send Message for Stream S
-#define TUPLES_PER_CHUNK_S 64
+//#define TUPLES_PER_CHUNK_S 64
 
 /* Thread number for GPU processing*/
-#define GPU_THREAD_NUM 128
+//#define GPU_THREAD_NUM 128
 
 /* Lock the worker until the master notifies*/
 #define MAIN_PROCESSING_LOCK 0
