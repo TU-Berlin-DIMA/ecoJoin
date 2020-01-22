@@ -112,6 +112,9 @@ struct worker_ctx_t {
     /* GPU parameter */
     unsigned gpu_gridsize;
     unsigned gpu_blocksize;
+
+    /* Enable frequency scaling in code*/
+    bool enable_freq_scaling;
 };
 
 

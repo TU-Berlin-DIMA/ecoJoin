@@ -17,6 +17,7 @@
 #include "worker.h"
 #include "kernels.h"
 #include "cuda_helper.h"
+#include "dvs.h"
 
 /* --- forward declarations --- */
 static inline void emit_result (worker_ctx_t *ctx, unsigned int r,
@@ -43,15 +44,20 @@ void *start_worker(void *ctx){
 	time_t start = time(0);
 	while (true)
    	{
+		if(w_ctx->enable_freq_scaling)
+			set_min_freq();
+
 		/* Wait until main releases the lock and enough data arrived
 		 * Using conditional variables we avoid busy waiting
 		 */
-		if (MAIN_PROCESSING_LOCK){
-			std::unique_lock<std::mutex> lk(*(w_ctx->data_mutex));
-			w_ctx->data_cv->wait(lk, [&](){return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
-				   || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size);});
-		}
-		
+		std::unique_lock<std::mutex> lk(*(w_ctx->data_mutex));
+		w_ctx->data_cv->wait(lk, [&](){
+				return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
+			   || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size);});
+
+		if(w_ctx->enable_freq_scaling)
+			set_max_freq();
+
 		/* process TUPLES_PER_CHUNK_R if there are that many tuples available */
 		if (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
 		    process_r (w_ctx);
@@ -150,7 +156,6 @@ void process_r_gpu (worker_ctx_t *w_ctx){
 
 	if (s_processed - s_first > 0){
 		
-		std::cout << w_ctx->gpu_gridsize << w_ctx->gpu_blocksize << "\n";
 		/* Start kernel */
 		compare_kernel_new_r<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(w_ctx->gpu_output_buffer, 
 				&(w_ctx->S.a[s_first]), &(w_ctx->S.b[s_first]), 

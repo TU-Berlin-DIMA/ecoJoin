@@ -19,6 +19,7 @@
 #include <condition_variable>
 #include "assert.h"
 #include "string.h"
+#include "dvs.h"
 
 
 /* ----- forward declarations ----- */
@@ -45,9 +46,12 @@ static void usage(){
 	printf ("  -B NUM  batchsize for stream S\n");
 	printf ("  -g NUM  GPU gridsize\n");
 	printf ("  -G NUM  GPU blocksize\n");
+	printf ("  -f enable frequency by stream join\n");
+	printf ("  -e end when worker ends\n");
 }
 
 int main(int argc, char **argv) {
+
 	master_ctx_t *ctx = (master_ctx_t *) malloc (sizeof (*ctx));
 	int ch;
 
@@ -71,16 +75,18 @@ int main(int argc, char **argv) {
 	ctx->s_available = 0;
 	ctx->r_processed = 0;
 	ctx->s_processed = 0;
-	ctx->r_batch_size = 64;
-	ctx->s_batch_size = 64;
+	ctx->r_batch_size = 2048;//64;
+	ctx->s_batch_size = 2048;//64;
 	ctx->time_sleep = true;
         ctx->time_sleep_control_in_worker = true;
         ctx->gpu_gridsize = 1;
         ctx->gpu_blocksize = 128;
+        ctx->enable_freq_scaling = false;
+	ctx->end_when_worker_ends = false;
 	
 	
 	/* parse command lines */
-	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:T:t:B:b:g:G:")) != -1)
+	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:fe")) != -1)
 	{
 		switch (ch)
 		{
@@ -145,7 +151,13 @@ int main(int argc, char **argv) {
 				ctx->gpu_gridsize = (unsigned)atoi(optarg);
 				break;
 			case 'G':
-				ctx->gpu_blocksize = (unsigned)atoi(optarg);;
+				ctx->gpu_blocksize = (unsigned)atoi(optarg);
+				break;
+			case 'f':
+				ctx->enable_freq_scaling = true;
+				break;
+			case 'e':
+				ctx->end_when_worker_ends = true;
 				break;
 			case 'h':
 			case '?':
@@ -153,6 +165,9 @@ int main(int argc, char **argv) {
 				usage (); exit (EXIT_SUCCESS);
 		}
 	}
+
+	if(ctx->enable_freq_scaling)
+		set_min_freq();
 
 	fprintf (ctx->outfile, "# Generating input data...\n");
 	fprintf (ctx->outfile, "# Using parameters:\n");
@@ -196,6 +211,7 @@ int main(int argc, char **argv) {
 	w_ctx->s_batch_size = ctx->s_batch_size;
 	w_ctx->gpu_gridsize = ctx->gpu_gridsize;
 	w_ctx->gpu_blocksize = ctx->gpu_blocksize;
+	w_ctx->enable_freq_scaling = ctx->enable_freq_scaling;
 		
 	/* Setup statistics*/
 	w_ctx->stats.processed_output_tuples = 0;
@@ -291,14 +307,15 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 			 *  TUPLES_PER_CHUNK_R <= Throughput
 			 */ 
 			/* Notify condition */
-			if (MAIN_PROCESSING_LOCK && ctx->r_available >= ctx->r_processed + ctx->r_batch_size){
+			if (ctx->r_available >= ctx->r_processed + ctx->r_batch_size){
 				ctx->data_cv.notify_one();
+				// ctx->r_processed = ctx->r_processed + ctx->r_batch_size;
 			}
 		} else {
 			ctx->s_available++;
 
 			/* Notify condition */
-			if (MAIN_PROCESSING_LOCK && ctx->s_available >= ctx->s_processed + ctx->s_batch_size){
+			if (ctx->s_available >= ctx->s_processed + ctx->s_batch_size){
 				ctx->data_cv.notify_one();
 			}
 		}
@@ -315,6 +332,15 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 		}
 	}
 	fprintf (ctx->outfile, "# End of Stream\n\n");
+
+	fprintf (ctx->outfile, "# Wait for Worker to finish\n\n");
+        while(true && ctx->end_when_worker_ends) {
+        	if (w_ctx->r_available - w_ctx->r_processed <= w_ctx->r_batch_size
+        		&& w_ctx->s_available - w_ctx->s_processed <= w_ctx->s_batch_size) {
+                	break;
+                }
+		usleep(1000000); /* 1 sec */
+        }
 
 	fprintf (ctx->outfile, "# Output Tuples       : %u\n", w_ctx->stats.processed_output_tuples);
 	fprintf (ctx->outfile, "# Throughput (tuple/s): %f\n", w_ctx->stats.processed_output_tuples/((float)ctx->num_tuples_R/(float)ctx->rate_R));

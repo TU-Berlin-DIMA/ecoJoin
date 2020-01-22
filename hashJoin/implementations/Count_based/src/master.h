@@ -121,6 +121,12 @@ struct master_ctx_t {
       /* GPU parameter */
       unsigned gpu_gridsize;
       unsigned gpu_blocksize;
+      
+      /* Enable frequency scaling in code*/
+      bool enable_freq_scaling;
+
+      /* end when worker ends */ 
+      bool end_when_worker_ends;
 };
 typedef struct master_ctx_t master_ctx_t;
 
