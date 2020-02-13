@@ -77,8 +77,8 @@ int main(int argc, char **argv) {
 	ctx->s_processed = 0;
 	ctx->r_batch_size = 2048;//64;
 	ctx->s_batch_size = 2048;//64;
-	ctx->time_sleep = true;
-        ctx->time_sleep_control_in_worker = true;
+	ctx->time_sleep = false;
+        ctx->time_sleep_control_in_worker = false;
         ctx->gpu_gridsize = 1;
         ctx->gpu_blocksize = 128;
         ctx->enable_freq_scaling = false;
