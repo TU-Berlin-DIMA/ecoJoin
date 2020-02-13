@@ -1,0 +1,12 @@
+-n  9000 -N  9000 -r 150  -R 150   -p gpu -g 1 -G 128  -e -O bench.csv -b 8192 -B 8192
+-n 18000 -N 18000 -r 300  -R 300   -p gpu -g 1 -G 128  -e -O bench.csv -b 8192 -B 8192
+-n 36000 -N 36000 -r 600  -R 600   -p gpu -g 1 -G 128  -e -O bench.csv -b 8192 -B 8192
+-n 54000 -N 54000 -r 900  -R 900   -p gpu -g 1 -G 128  -e -O bench.csv -b 8192 -B 8192
+-n 72000 -N 72000 -r 1200 -R 1200  -p gpu -g 1 -G 128  -e -O bench.csv -b 8192 -B 8192
+-n 90000 -N 90000 -r 1500 -R 1500  -p gpu -g 1 -G 128  -e -O bench.csv -b 8192 -B 8192
+-n 9000  -N  9000 -r 150  -R 150   -p cpu  -e -O bench.csv -b 8192 -B 8192
+-n 18000 -N 18000 -r 300  -R 300   -p cpu  -e -O bench.csv -b 8192 -B 8192
+-n 36000 -N 36000 -r 600  -R 600   -p cpu  -e -O bench.csv -b 8192 -B 8192
+-n 54000 -N 54000 -r 900  -R 900   -p cpu  -e -O bench.csv -b 8192 -B 8192
+-n 72000 -N 72000 -r 1200 -R 1200  -p cpu  -e -O bench.csv -b 8192 -B 8192
+-n 90000 -N 90000 -r 1500 -R 1500  -p cpu  -e -O bench.csv -b 8192 -B 8192

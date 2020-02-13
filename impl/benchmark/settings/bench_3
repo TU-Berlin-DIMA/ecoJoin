@@ -1,0 +1,2 @@
+-n 36000 -N 36000 -r 600 -R 600 -p cpu -O bench.csv  -s 2 -S 1
+-n 36000 -N 36000 -r 600 -R 600 -p cpu -O bench.csv  -s 3 -S 1

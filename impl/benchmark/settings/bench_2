@@ -1,0 +1,1 @@
+-p gpu -O bench.csv -N 2000 -n 2000
