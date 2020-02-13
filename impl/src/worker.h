@@ -11,17 +11,7 @@
 #include "data.h"
 #include "messages.h"
 #include "master.h"
-
-struct statistics {
-    /* Timestamp when the stream started *stream started */
-    struct timespec start_time;
-
-    /* Number of tuples that where matched by the join*/
-    unsigned processed_output_tuples;
-
-    /* latency in ms of each tuple that was processed by the join*/
-    long summed_latency;
-};
+#include "statistics.h"
 
 struct worker_ctx_t {
     /* stores statistics */

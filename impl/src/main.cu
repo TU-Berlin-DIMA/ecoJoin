@@ -215,8 +215,13 @@ int main(int argc, char **argv) {
 		
 	/* Setup statistics*/
 	w_ctx->stats.processed_output_tuples = 0;
+	w_ctx->stats.processed_input_tuples = 0;
 	w_ctx->stats.summed_latency = 0;
+	w_ctx->stats.runtime_idle= 0;
+	w_ctx->stats.runtime_proc= 0;
+	w_ctx->stats.runtime= 0;
 	w_ctx->stats.start_time = (struct timespec) { .tv_sec  = 0, .tv_nsec = 0 };
+	w_ctx->stats.end_time   = (struct timespec) { .tv_sec  = 0, .tv_nsec = 0 };
 
 
 	if (ctx->processing_mode == cpu_mode)
@@ -250,7 +255,9 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	/* difference t_real - t_rel in seconds */
 	time_t t_offset;
 
+	/* start of stream and time when processing is stopped */
 	struct timespec t_start;
+	struct timespec t_end;
 
 	if (hj_gettime (&t_start))
 	{
@@ -334,21 +341,26 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	fprintf (ctx->outfile, "# End of Stream\n\n");
 
 	fprintf (ctx->outfile, "# Wait for Worker to finish\n\n");
-        while(true && ctx->end_when_worker_ends) {
+        while(ctx->end_when_worker_ends) {
         	if (w_ctx->r_available - w_ctx->r_processed <= w_ctx->r_batch_size
         		&& w_ctx->s_available - w_ctx->s_processed <= w_ctx->s_batch_size) {
                 	break;
                 }
 		usleep(1000000); /* 1 sec */
         }
-
-	fprintf (ctx->outfile, "# Output Tuples       : %u\n", w_ctx->stats.processed_output_tuples);
-	fprintf (ctx->outfile, "# Throughput (tuple/s): %f\n", w_ctx->stats.processed_output_tuples/((float)ctx->num_tuples_R/(float)ctx->rate_R));
-	fprintf (ctx->outfile, "# Average Latency (ms): %f\n", (float)w_ctx->stats.summed_latency/(float)w_ctx->stats.processed_output_tuples*0.001);
-	fprintf (ctx->outfile, "# Processed Index     : r %u s %u\n", ctx->r_processed, ctx->s_processed);
-	fprintf (ctx->outfile, "# Available Index     : r %u s %u\n", ctx->r_available, ctx->s_available);
 	
-	// Processed Tuples, Throughput, Latency, #Processed R, #Processed S
-	fprintf (ctx->resultfile, "%u, %f, %f, %u, %u\n", w_ctx->stats.processed_output_tuples, w_ctx->stats.processed_output_tuples/((float)ctx->num_tuples_R/(float)ctx->rate_R), (float)w_ctx->stats.summed_latency/(float)w_ctx->stats.processed_output_tuples*0.001, ctx->r_available - ctx->r_processed, ctx->s_available - ctx->s_processed);
+	/* get end time */
+	if (hj_gettime (&t_end))
+	{
+		 fprintf (stderr,
+			 "Something went wrong with the real time interface.\n");
+		 fprintf (stderr, "A call to hj_gettime() failed.\n");
+		 exit (EXIT_FAILURE);
+	}
+	w_ctx->stats.end_time =  t_end;
+
+	
+	print_starts(&(w_ctx->stats), outfile, resultfile, ctx);
+
 	exit(0);
 }

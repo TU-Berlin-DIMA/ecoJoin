@@ -42,10 +42,16 @@ void *start_worker(void *ctx){
 	init_worker(w_ctx);
 
 	time_t start = time(0);
+	time_t idle_start_time = time(0);
+	time_t proc_start_time = time(0);
+
 	while (true)
    	{
 		if(w_ctx->enable_freq_scaling)
 			set_min_freq();
+
+		w_ctx->stats.runtime_proc += difftime(time(0), proc_start_time);
+		time_t idle_start_time = time(0);
 
 		/* Wait until main releases the lock and enough data arrived
 		 * Using conditional variables we avoid busy waiting
@@ -54,6 +60,9 @@ void *start_worker(void *ctx){
 		w_ctx->data_cv->wait(lk, [&](){
 				return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
 			   || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size);});
+		
+		w_ctx->stats.runtime_idle += difftime(time(0), idle_start_time);
+		time_t proc_start_time = time(0);
 
 		if(w_ctx->enable_freq_scaling)
 			set_max_freq();
