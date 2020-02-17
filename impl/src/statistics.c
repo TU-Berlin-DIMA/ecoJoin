@@ -19,7 +19,7 @@ void print_statistics (statistics *stats, FILE *outfile, FILE *resultfile, maste
 
         // Processed Tuples, Throughput, Latency, Processed Input Tuples, Runtime, Idle time, Proc time
         fprintf (resultfile, 
-			"%u, %f, %f, %u, %ld, %ld, %ld\n", 
+			"%u, %f, %f, %u, %ld, %ld, %ld, %ld\n", 
 			stats->processed_output_tuples, 
 			stats->processed_output_tuples/((float)ctx->num_tuples_R/(float)ctx->rate_R), 
 			(float)stats->summed_latency/(float)stats->processed_output_tuples*0.001, 
