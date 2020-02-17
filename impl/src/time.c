@@ -16,6 +16,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "time.h"
 #include "string.h"
@@ -54,6 +55,33 @@ void hj_nanosleep_legacy (timespec *ts)
         gettimeofday (&t, NULL);
     } while (t.tv_sec * 1000000000 + t.tv_usec * 1000
             < ts->tv_sec * 1000000000 + ts->tv_nsec);
+}
+
+void timespec_diff(struct timespec *start, struct timespec *stop,
+                   struct timespec *result)
+{
+    if ((stop->tv_nsec - start->tv_nsec) < 0) {
+        result->tv_sec = stop->tv_sec - start->tv_sec - 1;
+        result->tv_nsec = stop->tv_nsec - start->tv_nsec + 1000000000;
+    } else {
+        result->tv_sec = stop->tv_sec - start->tv_sec;
+        result->tv_nsec = stop->tv_nsec - start->tv_nsec;
+    }
+
+    return;
+}
+
+long timespec_to_ms(struct timespec *spec){
+    long    ms; // Milliseconds
+    time_t    s;  // Seconds
+
+    s  = spec->tv_sec;
+    ms = round(spec->tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
+    if (ms > 999) {
+        s++;
+        ms = 0;
+    }
+    return ms;
 }
 
 // buf needs to store 30 characters

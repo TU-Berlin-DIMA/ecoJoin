@@ -21,11 +21,17 @@
 #include <time.h>
 #include <sys/time.h>
 
+void timespec_diff(struct timespec *start, struct timespec *stop,
+                   struct timespec *result);
+
+long timespec_to_ms(struct timespec *spec);
+
+void print_timespec(struct timespec time);
+
 #define hj_gettime(tm) \
     clock_gettime (CLOCK_REALTIME, (tm))
 
 void hj_nanosleep (struct timespec *ts);
 
-void print_timespec(struct timespec *time);
 
 #endif  /* TIME_H */

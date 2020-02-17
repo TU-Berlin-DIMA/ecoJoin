@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
 	ctx->r_batch_size = 2048;//64;
 	ctx->s_batch_size = 2048;//64;
 	ctx->time_sleep = false;
-        ctx->time_sleep_control_in_worker = false;
+        ctx->time_sleep_control_in_worker = true;
         ctx->gpu_gridsize = 1;
         ctx->gpu_blocksize = 128;
         ctx->enable_freq_scaling = false;
@@ -136,10 +136,10 @@ int main(int argc, char **argv) {
 				ctx->process_window_time = strtol (optarg, NULL, 10);
 				break;
 			case 'T':
-				ctx->time_sleep = false;
+				ctx->time_sleep = true;
 				break;
 			case 't':
-				ctx->time_sleep_control_in_worker = false;
+				ctx->time_sleep_control_in_worker = true;
 				break;
 			case 'b':
 				ctx->r_batch_size = strtol (optarg, NULL,10);
@@ -212,6 +212,7 @@ int main(int argc, char **argv) {
 	w_ctx->gpu_gridsize = ctx->gpu_gridsize;
 	w_ctx->gpu_blocksize = ctx->gpu_blocksize;
 	w_ctx->enable_freq_scaling = ctx->enable_freq_scaling;
+	w_ctx->stop_signal = 0;
 		
 	/* Setup statistics*/
 	w_ctx->stats.processed_output_tuples = 0;
@@ -220,8 +221,9 @@ int main(int argc, char **argv) {
 	w_ctx->stats.runtime_idle= 0;
 	w_ctx->stats.runtime_proc= 0;
 	w_ctx->stats.runtime= 0;
-	w_ctx->stats.start_time = (struct timespec) { .tv_sec  = 0, .tv_nsec = 0 };
-	w_ctx->stats.end_time   = (struct timespec) { .tv_sec  = 0, .tv_nsec = 0 };
+	w_ctx->stats.start_time_ts = (struct timespec) { .tv_sec  = 0, .tv_nsec = 0 };
+	//w_ctx->stats.start_time = ;
+	//w_ctx->stats.end_time   = ;
 
 
 	if (ctx->processing_mode == cpu_mode)
@@ -257,7 +259,6 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 
 	/* start of stream and time when processing is stopped */
 	struct timespec t_start;
-	struct timespec t_end;
 
 	if (hj_gettime (&t_start))
 	{
@@ -270,7 +271,9 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	/* add a few seconds delay to play safe */
 	t_start.tv_sec += 5;
 	t_offset = t_start.tv_sec;
-	w_ctx->stats.start_time =  (struct timespec) { .tv_sec  = t_offset, .tv_nsec = 0 };
+
+	w_ctx->stats.start_time = std::chrono::system_clock::now() + std::chrono::duration<int>(5);
+	w_ctx->stats.start_time_ts =  (struct timespec) { .tv_sec  = t_offset, .tv_nsec = 0 };
 	
 	/* time used for Process / Idle window control */
         time_t start = time(0);
@@ -343,24 +346,19 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	fprintf (ctx->outfile, "# Wait for Worker to finish\n\n");
         while(ctx->end_when_worker_ends) {
         	if (w_ctx->r_available - w_ctx->r_processed <= w_ctx->r_batch_size
-        		&& w_ctx->s_available - w_ctx->s_processed <= w_ctx->s_batch_size) {
-                	break;
+        		&& w_ctx->s_available - w_ctx->s_processed <= w_ctx->s_batch_size
+			&& w_ctx->stop_signal) {
+			break;
                 }
 		usleep(1000000); /* 1 sec */
         }
 	
-	/* get end time */
-	if (hj_gettime (&t_end))
-	{
-		 fprintf (stderr,
-			 "Something went wrong with the real time interface.\n");
-		 fprintf (stderr, "A call to hj_gettime() failed.\n");
-		 exit (EXIT_FAILURE);
-	}
-	w_ctx->stats.end_time =  t_end;
+	/* Statistics */
+	w_ctx->stats.end_time = std::chrono::system_clock::now();;
+       	w_ctx->stats.runtime = std::chrono::duration_cast
+                        <std::chrono::milliseconds>(w_ctx->stats.end_time - w_ctx->stats.start_time).count();;
 
-	
-	print_starts(&(w_ctx->stats), outfile, resultfile, ctx);
+	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->resultfile, ctx);
 
 	exit(0);
 }

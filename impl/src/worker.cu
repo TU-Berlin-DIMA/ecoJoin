@@ -42,16 +42,23 @@ void *start_worker(void *ctx){
 	init_worker(w_ctx);
 
 	time_t start = time(0);
-	time_t idle_start_time = time(0);
-	time_t proc_start_time = time(0);
+	auto idle_start_time = std::chrono::system_clock::now();
+	auto proc_start_time = std::chrono::system_clock::now();
 
 	while (true)
    	{
+
+		/* Stats */	
+		proc_start_time = std::chrono::system_clock::now();
+		w_ctx->stats.runtime_proc += std::chrono::duration_cast
+			<std::chrono::milliseconds>(proc_start_time - idle_start_time).count();
+		idle_start_time = std::chrono::system_clock::now();
+		
 		if(w_ctx->enable_freq_scaling)
 			set_min_freq();
 
-		w_ctx->stats.runtime_proc += difftime(time(0), proc_start_time);
-		time_t idle_start_time = time(0);
+		/* Waiting signal for master */
+		w_ctx->stop_signal = true;
 
 		/* Wait until main releases the lock and enough data arrived
 		 * Using conditional variables we avoid busy waiting
@@ -60,12 +67,19 @@ void *start_worker(void *ctx){
 		w_ctx->data_cv->wait(lk, [&](){
 				return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
 			   || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size);});
-		
-		w_ctx->stats.runtime_idle += difftime(time(0), idle_start_time);
-		time_t proc_start_time = time(0);
+	
+		w_ctx->stop_signal = false;
 
 		if(w_ctx->enable_freq_scaling)
 			set_max_freq();
+		
+		/* Stats */	
+		w_ctx->stats.switches_to_proc++;
+		idle_start_time = std::chrono::system_clock::now();
+		w_ctx->stats.runtime_idle += std::chrono::duration_cast
+			<std::chrono::milliseconds>(idle_start_time - proc_start_time).count();
+		proc_start_time = std::chrono::system_clock::now();
+
 
 		/* process TUPLES_PER_CHUNK_R if there are that many tuples available */
 		if (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
@@ -78,10 +92,11 @@ void *start_worker(void *ctx){
 
 		expire_outdated_tuples (w_ctx);
 
+		/* Used for Time Window-based Race-to-idle Processing */
 		if (w_ctx->time_sleep_control_in_worker && w_ctx->time_sleep) {
-			/* Check if we are still in the process time window */
+			// Check if we are still in the process time window 
 			if (difftime( time(0), start) == w_ctx->process_window_time){
-				/* Start idle time window */
+				// Start idle time window 
 				usleep(w_ctx->idle_window_time);
 
 				start = time(0);
@@ -285,10 +300,10 @@ emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 	if (w_ctx->S.t[s].tv_sec*1000000000L + w_ctx->S.t[s].tv_nsec >
 		w_ctx->R.t[r].tv_sec*1000000000L + w_ctx->R.t[r].tv_nsec){
 		w_ctx->stats.summed_latency += ((t.tv_sec * 1000000 + t.tv_usec) - 
-				((w_ctx->S.t[s].tv_sec + w_ctx->stats.start_time.tv_sec) * 1000000 + w_ctx->S.t[s].tv_nsec / 1000));
+				((w_ctx->S.t[s].tv_sec + w_ctx->stats.start_time_ts.tv_sec) * 1000000 + w_ctx->S.t[s].tv_nsec / 1000));
 	} else {
 		w_ctx->stats.summed_latency += ((t.tv_sec * 1000000 + t.tv_usec) - 
-				((w_ctx->R.t[r].tv_sec + w_ctx->stats.start_time.tv_sec) * 1000000 + w_ctx->R.t[r].tv_nsec / 1000));
+				((w_ctx->R.t[r].tv_sec + w_ctx->stats.start_time_ts.tv_sec) * 1000000 + w_ctx->R.t[r].tv_nsec / 1000));
 	}
 
 	w_ctx->stats.processed_output_tuples++;

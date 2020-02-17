@@ -105,6 +105,12 @@ struct worker_ctx_t {
 
     /* Enable frequency scaling in code*/
     bool enable_freq_scaling;
+
+    /* Worker can stop processing */
+    bool stop_signal;
+
+    /* Worker acks processing stop and finished statistics update */
+    bool stop_signal_ack;
 };
 
 
