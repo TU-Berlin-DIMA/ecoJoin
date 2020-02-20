@@ -59,6 +59,7 @@ void *start_worker(void *ctx){
 
 		/* Waiting signal for master */
 		w_ctx->stop_signal = true;
+		//std::cout << "sleep\n";
 
 		/* Wait until main releases the lock and enough data arrived
 		 * Using conditional variables we avoid busy waiting
@@ -69,6 +70,7 @@ void *start_worker(void *ctx){
 			   || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size);});
 	
 		w_ctx->stop_signal = false;
+		//std::cout << "work\n";
 
 		if(w_ctx->enable_freq_scaling)
 			set_max_freq();
@@ -82,13 +84,17 @@ void *start_worker(void *ctx){
 
 
 		/* process TUPLES_PER_CHUNK_R if there are that many tuples available */
-		if (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
+		if (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size) {
+		    //std::cout << *(w_ctx->r_processed) << "s " << w_ctx->r_batch_size << " " << *(w_ctx->s_processed) << "\n";
 		    process_r (w_ctx);
+		}
 
 		
 		/* process TUPLES_PER_CHUNK_S if there are that many tuples available */
-		if (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size)
+		if (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size){
+		    //std::cout << *(w_ctx->s_processed) << "s " << w_ctx->s_batch_size << " " << *(w_ctx->r_processed) << "\n";
 		    process_s (w_ctx);
+		}
 
 		expire_outdated_tuples (w_ctx);
 
@@ -111,6 +117,7 @@ void process_s (worker_ctx_t *w_ctx){
 	} else if (w_ctx->processing_mode == gpu_mode){
 		process_s_gpu(w_ctx);
 	}
+	w_ctx->stats.processed_input_tuples += w_ctx->s_batch_size;
 }
 
 void process_r (worker_ctx_t *w_ctx){
@@ -119,6 +126,7 @@ void process_r (worker_ctx_t *w_ctx){
 	} else if (w_ctx->processing_mode == gpu_mode){
 		process_r_gpu(w_ctx);
 	}
+	w_ctx->stats.processed_input_tuples += w_ctx->r_batch_size;
 }
 
 void init_worker (worker_ctx_t *w_ctx){
@@ -253,8 +261,9 @@ void process_s_cpu (worker_ctx_t *w_ctx){
 		{
 			const a_t a = w_ctx->S.a[s] - w_ctx->R.x[r];
 			const b_t b = w_ctx->S.b[s] - w_ctx->R.y[r];
-			if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
+			if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.)){
 			    emit_result (w_ctx, r, s);
+			}
 		}
 	}
 
@@ -305,6 +314,9 @@ emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 		w_ctx->stats.summed_latency += ((t.tv_sec * 1000000 + t.tv_usec) - 
 				((w_ctx->R.t[r].tv_sec + w_ctx->stats.start_time_ts.tv_sec) * 1000000 + w_ctx->R.t[r].tv_nsec / 1000));
 	}
+
+	const a_t a = w_ctx->S.a[s] - w_ctx->R.x[r];
+        const b_t b = w_ctx->S.b[s] - w_ctx->R.y[r];
 
 	w_ctx->stats.processed_output_tuples++;
 }

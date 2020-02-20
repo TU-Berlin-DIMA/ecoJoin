@@ -1,8 +1,1 @@
--n 36000 -N 36000 -r 600 -R 600 -p gpu -O bench.csv -T
--n 36000 -N 36000 -r 600 -R 600 -p gpu -O bench.csv -T -s 1 -S 1
--n 36000 -N 36000 -r 600 -R 600 -p gpu -O bench.csv -T -s 1 -S 2
--n 36000 -N 36000 -r 600 -R 600 -p gpu -O bench.csv -T -s 1 -S 3
--n 36000 -N 36000 -r 600 -R 600 -p cpu -O bench.csv -T
--n 36000 -N 36000 -r 600 -R 600 -p cpu -O bench.csv -T -s 1 -S 1
--n 36000 -N 36000 -r 600 -R 600 -p cpu -O bench.csv -T -s 1 -S 2
--n 36000 -N 36000 -r 600 -R 600 -p cpu -O bench.csv -T -s 1 -S 3
+-n 36000 -N 36000 -r 600 -R 600 -p cpu -O bench.csv -b 50 -B 50 -e -f

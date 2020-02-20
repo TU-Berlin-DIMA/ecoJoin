@@ -330,7 +330,6 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 			}
 		}
 
-
 		if (ctx->time_sleep && !ctx->time_sleep_control_in_worker) {
 			/* Check if we are still in the process time window */
 			if (difftime( time(0), start) == ctx->process_window_time){
@@ -341,16 +340,30 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 			}
 		}
 	}
-	fprintf (ctx->outfile, "# End of Stream\n\n");
+	fprintf (ctx->outfile, "# End of Stream\n");
 
-	fprintf (ctx->outfile, "# Wait for Worker to finish\n\n");
-        while(ctx->end_when_worker_ends) {
-        	if (w_ctx->r_available - w_ctx->r_processed <= w_ctx->r_batch_size
-        		&& w_ctx->s_available - w_ctx->s_processed <= w_ctx->s_batch_size
-			&& w_ctx->stop_signal) {
-			break;
-                }
-		usleep(1000000); /* 1 sec */
+        if(ctx->end_when_worker_ends) {
+		fprintf (ctx->outfile, "# Wait for Worker to finish\n");
+
+		/* Process Remaining */
+	        while(true) {
+			/* hinder worker to add wrong batch size */
+			if (w_ctx->stop_signal 
+				&& ctx->r_available - ctx->r_processed != 0
+				&& ctx->s_available - ctx->s_processed != 0) {
+				//std::cout << "update batchsize\n";
+				/* update batch size */
+				w_ctx->r_batch_size = ctx->r_available - ctx->r_processed;
+				w_ctx->s_batch_size = ctx->s_available - ctx->s_processed;
+				ctx->data_cv.notify_one();
+				w_ctx->stop_signal = false;
+			}
+        		if (((ctx->r_available - ctx->r_processed <= 0)
+        			&& (ctx->s_available - ctx->s_processed <= 0))
+				&& w_ctx->stop_signal)
+				break;
+			usleep(1000000); /* 1 sec */
+		}
         }
 	
 	/* Statistics */

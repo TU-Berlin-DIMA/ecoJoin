@@ -16,6 +16,8 @@ void print_statistics (statistics *stats, FILE *outfile, FILE *resultfile, maste
         fprintf (outfile, "# Runtime Idle (ms): %ld\n", stats->runtime_idle);
         fprintf (outfile, "# Runtime Proc (ms): %ld\n", stats->runtime_proc);
         fprintf (outfile, "# Switches to Proc : %ld\n", stats->switches_to_proc);
+        fprintf (outfile, "# Processed Input  : %ld\n", stats->processed_input_tuples);
+
 
         // Processed Tuples, Throughput, Latency, Processed Input Tuples, Runtime, Idle time, Proc time
         fprintf (resultfile, 

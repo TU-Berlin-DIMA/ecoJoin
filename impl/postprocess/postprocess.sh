@@ -13,4 +13,3 @@ else
 	python3 ./tools/gen_energy_plots.py $1
 	mv result.csv $1
 fi
-
