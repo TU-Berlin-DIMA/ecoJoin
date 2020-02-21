@@ -3,6 +3,9 @@
 
 
 #include <stdio.h>
+#include <fstream>
+#include <iostream>
+#include <string>
 #include "statistics.h"
 #include "master.h"
 
@@ -30,5 +33,18 @@ void print_statistics (statistics *stats, FILE *outfile, FILE *resultfile, maste
 			stats->runtime_idle,
 			stats->runtime_proc,
 			stats->switches_to_proc);
+}
+
+void write_output_tuple_stats(statistics *stats, std::string filename){
+	std::fstream  file;
+	file.open(filename, std::ios::out);
+	for (int i = 0; 
+		i < std::chrono::duration_cast<std::chrono::seconds>(stats->end_time - stats->start_time).count(); i++){
+		if (stats->output_tuple_map.count(i))
+			file << i << ", "<< stats->output_tuple_map[i] << "\n"; 
+		else
+			file << i << ", "<< 0 << "\n"; 
+	}
+	file.close();
 }
 #endif /* STATISTICS_H */

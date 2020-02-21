@@ -319,6 +319,8 @@ emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
         const b_t b = w_ctx->S.b[s] - w_ctx->R.y[r];
 
 	w_ctx->stats.processed_output_tuples++;
+	int sec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - w_ctx->stats.start_time ).count();
+	w_ctx->stats.output_tuple_map[sec]++;
 }
 
 

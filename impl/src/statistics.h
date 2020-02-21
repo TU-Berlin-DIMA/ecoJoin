@@ -1,6 +1,7 @@
 #include "time.h"
 #include "master.h"
 #include <chrono>
+#include <unordered_map>
 
 struct statistics {
     /* Timestamp when the stream started without offset*/
@@ -34,6 +35,10 @@ struct statistics {
     /* Number of switches to processing mode */
     unsigned switches_to_proc;
 
+    /* stores the number of output tuples per sec */
+    std::unordered_map<int, int> output_tuple_map;
 };
 
 void print_statistics(statistics *stats, FILE *outfile, FILE *resultfile,  master_ctx_t *ctx);
+
+void write_output_tuple_stats(statistics *stats, std::string filename);

@@ -222,6 +222,7 @@ int main(int argc, char **argv) {
 	w_ctx->stats.runtime_proc= 0;
 	w_ctx->stats.runtime= 0;
 	w_ctx->stats.start_time_ts = (struct timespec) { .tv_sec  = 0, .tv_nsec = 0 };
+	w_ctx->stats.output_tuple_map = std::unordered_map<int, int>();
 	//w_ctx->stats.start_time = ;
 	//w_ctx->stats.end_time   = ;
 
@@ -372,6 +373,7 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
                         <std::chrono::milliseconds>(w_ctx->stats.end_time - w_ctx->stats.start_time).count();;
 
 	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->resultfile, ctx);
+	write_output_tuple_stats(&(w_ctx->stats), "output_tuple_stats.csv");
 
 	exit(0);
 }
