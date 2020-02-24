@@ -9,7 +9,7 @@ def start_bench(line):
     message = socket.recv()
 
     # Start GPU Monitor
-    # p = subprocess.Popen(['./helper/gpu_monitor.sh'], stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid) 
+    #p = subprocess.Popen(['./helper/benchmark_.sh'], stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid) 
 
     # Start Bench
     subprocess.call([benchmark + " " + line], shell = True, preexec_fn=os.setsid)
