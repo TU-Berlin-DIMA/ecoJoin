@@ -41,26 +41,24 @@ struct worker_ctx_t {
     std::condition_variable *data_cv;
     std::mutex *data_mutex;
 
-   /**
-     * Those pieces of R that we (need to) have locally for join
-     * execution.     
-     */
-    struct {
-	struct timespec *t;
-        x_t             *x;
-        y_t             *y;
-    } R;
-
     /**
-     * Those pieces of S that we (need to) have locally for join
-     * execution.
-     */
+    * Input data stream R
+    */
     struct {
-	struct timespec *t;
-        a_t             *a;
-        b_t             *b;
-    } S;
+	    std::chrono::nanoseconds *t_ns;
+	    x_t             *x;
+	    y_t             *y;
+    } R;
     
+    /**
+    * Input data stream S
+    */
+    struct {
+	    std::chrono::nanoseconds *t_ns;
+	    a_t             *a;
+	    b_t             *b;
+    } S;
+
     /**
      * whether the join is processed on the cpu or gpu
      * defined in master.h
@@ -69,6 +67,9 @@ struct worker_ctx_t {
 
     /* Pointer to the Buffer that the gpu uses to write to */
     int *gpu_output_buffer;
+
+    /* Size of output buffer in bytes */
+    int gpu_output_buffer_size;
 
     /** window size for R (in sec) **/
     unsigned window_size_R;

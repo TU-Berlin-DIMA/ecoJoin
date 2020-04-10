@@ -2,6 +2,7 @@ import zmq
 import sys
 import subprocess, os, signal, time
 import datetime
+import csv
 
 def start_bench(line):
     print("Send start measure signal")
@@ -42,17 +43,31 @@ print("create dir " + dir_)
 os.mkdir(dir_)
 
 ####################################
-print("Reference Measure")
-socket.send(b"Reference")
-message = socket.recv()
-time.sleep(15)
-socket.send(b"End Reference")
-message = socket.recv()
-
+def ref_measure():
+    print("Reference Measure")
+    socket.send(b"Reference")
+    message = socket.recv()
+    time.sleep(15)
+    socket.send(b"End Reference")
+    message = socket.recv()
+    return float(str(message))
 
 ####################################
 print("Start benchmark")
 f = open(setting,'r')
+
+config  = []
+latency = []
+i_time = []
+p_time = []
+energy = []
+output_t = []
+input_t = []
+
+refs = []
+
+# Reset Freqs
+subprocess.call(["/home/adi/efficient-gpu-joins/impl/benchmark/helper/reset_freqs.sh"], shell = True, preexec_fn=os.setsid)
 
 linenumber = 0
 for line in f:
@@ -62,7 +77,9 @@ for line in f:
     else:
         linenumber = linenumber + 1
         
-        subprocess.call(["/home/adi/efficient-gpu-joins/impl/benchmark/helper/reset_freqs.sh"], shell = True, preexec_fn=os.setsid)
+
+        refs.append(ref_measure())
+        
         setting_stripped = line.replace(" ","").strip()
         print(setting_stripped)
         
@@ -78,7 +95,6 @@ for line in f:
             message = socket.recv()
 
         f = open(dir_ + '/' +'exp'+ setting_stripped ,'wb')
-
         f.write(message)
         f.close()
 
@@ -86,4 +102,50 @@ for line in f:
         # subprocess.call(["mv sys_monitor.csv " + dir_ + "/" + setting_stripped + "sys_monitor.csv"  ], shell = True)
         subprocess.call(["mv bench.csv " + dir_ + "/" + setting_stripped + "bench.csv"  ], shell = True)
 
-socket.send(b"End")
+
+        # Read Latency
+        line_ = []
+        with open(dir_ + "/" + setting_stripped + "bench.csv") as f:
+            for line in f:
+                cline = line.split(",")
+
+        config.append(setting_stripped)
+        latency.append(float(cline[2]))
+        i_time.append(float(cline[5]))
+        p_time.append(float(cline[6]))
+        output_t.append(float(cline[0]))
+        input_t.append(float(cline[3]))
+
+
+        # calc avg energy
+        with open(dir_ + '/' +'exp'+ setting_stripped) as f_input:
+            csv_input = csv.reader(f_input, delimiter=' ')
+
+            # ignore comments
+            for i in range(9):
+                next(csv_input)
+
+            header = next(csv_input)
+            s = 0
+            i = 0
+            for row in csv_input:
+                try:
+                    s = s + float(row[4])
+                except:
+                    s = s + 0
+                i = i + 1
+            s = s / i
+            energy.append(s)
+
+        # Reset Freqs
+        subprocess.call(["/home/adi/efficient-gpu-joins/impl/benchmark/helper/reset_freqs.sh"], shell = True, preexec_fn=os.setsid)
+
+with open(dir_ + '.csv', 'w') as f_output:
+    csv_output = csv.writer(f_output)
+    for i in range(len(config)):
+        csv_output.writerow([config[i] , latency[i] , i_time[i] , p_time[i] , energy[i] , input_t[i] , output_t[i]] )
+        print([config[i] , latency[i] , i_time[i] , p_time[i] , energy[i] , input_t[i] , output_t[i]] )
+
+# Remove Folder
+subprocess.call(["rm -r " + dir_], shell = True)
+print(refs)

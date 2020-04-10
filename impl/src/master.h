@@ -8,7 +8,14 @@
 #include "ringbuffer.h"
 #include "data.h"
 
-enum processing_mode_e{cpu_mode, gpu_mode};
+enum processing_mode_e{
+	cpu1_mode, 
+	cpu2_mode, 
+	cpu3_mode, 
+	cpu4_mode, 
+	gpu_mode,
+	atomic_mode
+};
 
 
 struct master_ctx_t {
@@ -78,7 +85,7 @@ struct master_ctx_t {
 	 * Input data stream R
 	 */
 	struct {
-		struct timespec *t;
+		std::chrono::nanoseconds *t_ns;
 		x_t             *x;
 		y_t             *y;
 		z_t             *z;
@@ -88,7 +95,7 @@ struct master_ctx_t {
 	 * Input data stream S
 	 */
 	struct {
-		struct timespec *t;
+		std::chrono::nanoseconds *t_ns;
 		a_t             *a;
 		b_t             *b;
 		c_t             *c;

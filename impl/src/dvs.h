@@ -1,8 +1,9 @@
 #ifndef DVF_H
 #define DVF_H
 
-void set_min_freq();
+enum freq_device{GPU, CPU, BOTH}; 
+void set_min_freq(freq_device);
 
-void set_max_freq();
+void set_max_freq(freq_device);
 
 #endif  /* DVF_H */

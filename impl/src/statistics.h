@@ -3,6 +3,7 @@
 #include <chrono>
 #include <unordered_map>
 
+
 struct statistics {
     /* Timestamp when the stream started without offset*/
     std::chrono::time_point<std::chrono::system_clock> start_time;
@@ -19,8 +20,8 @@ struct statistics {
     /* summed processed tuples of both streams */
     unsigned processed_input_tuples;
 
-    /* latency in ms of each tuple that was processed by the join*/
-    long summed_latency;
+    /* latency in ns of each tuple that was processed by the join*/
+    std::chrono::nanoseconds summed_latency;
 
 
     /* overall runtime in ms */
@@ -37,8 +38,13 @@ struct statistics {
 
     /* stores the number of output tuples per sec */
     std::unordered_map<int, int> output_tuple_map;
+
+    /* stores the cpu usage once per second */
+    std::unordered_map<int, double> cpu_usage;
 };
 
 void print_statistics(statistics *stats, FILE *outfile, FILE *resultfile,  master_ctx_t *ctx);
 
-void write_output_tuple_stats(statistics *stats, std::string filename);
+void write_histogram_stats(statistics *stats, std::string filename);
+
+double get_current_cpu_usage();

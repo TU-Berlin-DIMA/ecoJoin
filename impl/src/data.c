@@ -47,9 +47,12 @@ generate_data (master_ctx_t *ctx)
 
     /* allocate memory */
 
-    if (ctx->processing_mode == cpu_mode){
+    if (ctx->processing_mode == cpu1_mode
+		    || ctx->processing_mode == cpu2_mode
+		    || ctx->processing_mode == cpu3_mode
+		    || ctx->processing_mode == cpu4_mode){
 	    /* FIXME: Consider NUMA here */
-	    ctx->R.t = (timespec*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.t));
+	    ctx->R.t_ns = (std::chrono::nanoseconds*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.t_ns));
 	    ctx->R.x = (x_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.x));
 	    ctx->R.y = (y_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.y));
 	    ctx->R.z = (z_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.z));
@@ -61,7 +64,7 @@ generate_data (master_ctx_t *ctx)
 	    }
 
 	    /* FIXME: Consider NUMA here */
-	    ctx->S.t = (timespec*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.t));
+	    ctx->S.t_ns = (std::chrono::nanoseconds*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.t_ns));
 	    ctx->S.a = (a_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.a));
 	    ctx->S.b = (b_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.b));
 	    ctx->S.c = (c_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.c));
@@ -72,9 +75,10 @@ generate_data (master_ctx_t *ctx)
 		fprintf (stderr, "memory allocation error\n");
 		exit (EXIT_FAILURE);
 	    }
-    } else if (ctx->processing_mode == gpu_mode){
+    } else if (ctx->processing_mode == gpu_mode
+		    || ctx->processing_mode == atomic_mode){
 	    unsigned *i;
-	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.t), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.t),0));
+	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.t_ns), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.t_ns),0));
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.x), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.x),0));
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.y), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.y),0));
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.z), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.z),0));
@@ -85,7 +89,7 @@ generate_data (master_ctx_t *ctx)
 		exit (EXIT_FAILURE);
 	    }
 
-	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.t), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.t),0));
+	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.t_ns), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.t_ns),0));
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.a), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.a),0));
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.b), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.b),0));
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.c), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.c),0));
@@ -109,53 +113,14 @@ generate_data (master_ctx_t *ctx)
     {
         t = t + (random () % range);
 
-        ctx->R.t[i] = (struct timespec) { .tv_sec  = t / 1000000000L,
-                                          .tv_nsec = t % 1000000000L };
+	auto ns = std::chrono::nanoseconds(t % 1000000000L);
+	auto s  = std::chrono::seconds(t / 1000000000L);
+	ctx->R.t_ns[i] = s + ns;
 
         ctx->R.x[i] = random () % ctx->int_value_range;
         ctx->R.y[i] = (float) (random () % ctx->float_value_range);
         snprintf (ctx->R.z[i], sizeof (z_t), "%u", i);
     }
-
-    /* add one dummy tuple with an "infinity" timestamp */
-    ctx->R.t[ctx->num_tuples_R] = (struct timespec) { .tv_sec  = 100000,
-                                                      .tv_nsec = 0 };
-
-    /* dump data to a file if requested */
-    /*
-    if (ctx->data_prefix)
-    {
-        unsigned int   l = strlen (ctx->data_prefix);
-        char          *s = malloc (l + 3);
-        FILE          *f;
-
-        assert (s);
-        strncpy (s, ctx->data_prefix, l);
-        s[l++] = '.'; s[l++] = 'R'; s[l++] = '\0';
-
-        if (!(f = fopen (s, "w")))
-        {
-            fprintf (stderr, "error dumping R to file %s.\n", s);
-            exit (EXIT_FAILURE);
-        }
-
-        fprintf (f, "#\n");
-        fprintf (f, "# Handshake Join data dump; stream R\n");
-        fprintf (f, "# $Id: main.c 598 2010-08-13 08:39:12Z jteubner $\n");
-        fprintf (f, "#\n");
-        fprintf (f, "#   timestamp    |     x     |      y     |           z\n");
-        fprintf (f, "# ---------------+-----------+------------+----------------------\n");
-
-        for (unsigned int i = 0; i < ctx->num_tuples_R; i++)
-        {
-            fprintf (f, "%6lu.%09lu | %9u | %10.2f | %20s\n",
-                    ctx->R.t[i].tv_sec, ctx->R.t[i].tv_nsec,
-                    ctx->R.x[i], ctx->R.y[i], ctx->R.z[i]);
-        }
-
-        fclose (f);
-    }
-    */
 
     /* generate data for S */
     t = 0;
@@ -164,8 +129,9 @@ generate_data (master_ctx_t *ctx)
     {
         t = t + (random () % range);
 
-        ctx->S.t[i] = (struct timespec) { .tv_sec  = t / 1000000000L,
-                                          .tv_nsec = t % 1000000000L };
+	auto ns = std::chrono::nanoseconds(t % 1000000000L);
+	auto s  = std::chrono::seconds(t / 1000000000L);
+	ctx->S.t_ns[i] = s + ns;
 
         ctx->S.a[i] = random () % ctx->int_value_range;
         ctx->S.b[i] = (float) (random () % ctx->float_value_range);
@@ -173,45 +139,6 @@ generate_data (master_ctx_t *ctx)
         ctx->S.d[i] = i % 2 == 0;
     }
 
-    /* add one dummy tuple with an "infinity" timestamp */
-    ctx->S.t[ctx->num_tuples_S] = (struct timespec) { .tv_sec  = 100000,
-                                                      .tv_nsec = 0 };
-
-    /* dump data to a file if requested */
-    /*
-    if (ctx->data_prefix)
-    {
-        unsigned int   l = strlen (ctx->data_prefix);
-        char          *s = malloc (l + 3);
-        FILE          *f;
-
-        assert (s);
-        strncpy (s, ctx->data_prefix, l);
-        s[l++] = '.'; s[l++] = 'S'; s[l++] = '\0';
-
-        if (!(f = fopen (s, "w")))
-        {
-            fprintf (stderr, "error dumping S to file %s.\n", s);
-            exit (EXIT_FAILURE);
-        }
-
-        fprintf (f, "#\n");
-        fprintf (f, "# Handshake Join data dump; stream S\n");
-        fprintf (f, "# $Id: main.c 598 2010-08-13 08:39:12Z jteubner $\n");
-        fprintf (f, "#\n");
-        fprintf (f, "#   timestamp    |     a     |      b     |     c      |   d\n");
-        fprintf (f, "# ---------------+-----------+------------+--------------------\n");
-
-        for (unsigned int i = 0; i < ctx->num_tuples_S; i++)
-        {
-            fprintf (f, "%6lu.%09lu | %9u | %10.2f | %10.2f | %5s\n",
-                    ctx->S.t[i].tv_sec, ctx->S.t[i].tv_nsec,
-                    ctx->S.a[i], ctx->S.b[i], ctx->S.c[i],
-                    ctx->S.d[i] ? "true" : "false");
-        }
-
-        fclose (f);
-    }
-    */
+   
 }
 
