@@ -75,6 +75,8 @@ int main(int argc, char **argv) {
 	ctx->s_available = 0;
 	ctx->r_processed = 0;
 	ctx->s_processed = 0;
+	ctx->max_cpu_freq = 14;
+	ctx->min_cpu_freq = 1;
 	ctx->r_batch_size = 2048;//64;
 	ctx->s_batch_size = 2048;//64;
 	ctx->time_sleep = false;
@@ -86,7 +88,7 @@ int main(int argc, char **argv) {
 	
 	
 	/* parse command lines */
-	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:fe")) != -1)
+	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:f:F:e")) != -1)
 	{
 		switch (ch)
 		{
@@ -162,7 +164,35 @@ int main(int argc, char **argv) {
 				ctx->gpu_blocksize = (unsigned)atoi(optarg);
 				break;
 			case 'f':
+				if (!ctx->enable_freq_scaling)
+					ctx->frequency_mode = cpu;
+				else 
+					ctx->frequency_mode = both;
+
 				ctx->enable_freq_scaling = true;
+				// no inits in switch case allowed
+				ctx->min_cpu_freq = std::stoi(std::string(optarg).substr(0, std::string(optarg).find('-')))-1;
+                                ctx->max_cpu_freq = 
+					std::stoi(std::string(optarg).substr(std::string(optarg).find('-')+1, std::string(optarg).length()))-1;
+				if (ctx->min_cpu_freq+1 < 1 || ctx->max_cpu_freq+1 > 14){
+					std::cout << "CPU Frequency selection must be between 1 and 14\n";
+					exit(0);
+				}
+				break;
+			case 'F':
+				if (!ctx->enable_freq_scaling)
+					ctx->frequency_mode = gpu;
+				else 
+					ctx->frequency_mode = both;
+
+				ctx->enable_freq_scaling = true;
+				ctx->min_gpu_freq = std::stoi(std::string(optarg).substr(0, std::string(optarg).find('-')))-1;
+                                ctx->max_gpu_freq = 
+					std::stoi(std::string(optarg).substr(std::string(optarg).find('-')+1, std::string(optarg).length()))-1;
+				if (ctx->min_gpu_freq+1 < 1 || ctx->max_gpu_freq+1 > 12){
+					std::cout << "GPU Frequency selection must be between 1 and 12\n";
+					exit(0);
+				}
 				break;
 			case 'e':
 				ctx->end_when_worker_ends = true;
@@ -175,7 +205,7 @@ int main(int argc, char **argv) {
 	}
 
 	if(ctx->enable_freq_scaling)
-		set_min_freq(BOTH);
+		set_freq(ctx->frequency_mode, ctx->min_cpu_freq, ctx->min_gpu_freq);
 
 	fprintf (ctx->outfile, "# Generating input data...\n");
 	fprintf (ctx->outfile, "# Using parameters:\n");
@@ -211,6 +241,10 @@ int main(int argc, char **argv) {
 	w_ctx->s_processed = &(ctx->s_processed);
 	w_ctx->r_available = &(ctx->r_available);
 	w_ctx->s_available = &(ctx->s_available);
+        w_ctx->min_cpu_freq = ctx->min_cpu_freq;
+        w_ctx->max_cpu_freq = ctx->max_cpu_freq;
+        w_ctx->min_gpu_freq = ctx->min_gpu_freq;
+        w_ctx->max_gpu_freq = ctx->max_gpu_freq;
 	w_ctx->data_cv = &(ctx->data_cv);
 	w_ctx->data_mutex = &(ctx->data_mutex);
 	w_ctx->time_sleep = ctx->time_sleep;
@@ -221,6 +255,7 @@ int main(int argc, char **argv) {
 	w_ctx->gpu_blocksize = ctx->gpu_blocksize;
 	w_ctx->enable_freq_scaling = ctx->enable_freq_scaling;
 	w_ctx->stop_signal = 0;
+	w_ctx->frequency_mode = ctx->frequency_mode;
 		
 	/* Setup statistics*/
 	w_ctx->stats.processed_output_tuples = 0;
@@ -265,21 +300,31 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	/* is the next tuple from the R stream */
 	bool next_is_R;
 
-	w_ctx->stats.start_time = std::chrono::system_clock::now() + std::chrono::duration<int>(5);
+	w_ctx->stats.start_time = std::chrono::system_clock::now();
 	
 	/* time used for Process / Idle window control */
         time_t start = time(0);
 
+	/* size of tuple batch to release to the worker */
+	const int master_batch_size = 1;
+	const int next = master_batch_size + 1;
+
+
+	/* Measure time until batch is full */
+	auto start_batch = std::chrono::system_clock::now();
+
 	while (ctx->r_available < ctx->num_tuples_R || ctx->s_available < ctx->num_tuples_S) {
 
 		/* is the next tuple an R or an S tuple? */
-		next_is_R = (ctx->R.t_ns[ctx->r_available] < ctx->S.t_ns[ctx->s_available]);
+		next_is_R = (ctx->R.t_ns[ctx->r_available+next] < ctx->S.t_ns[ctx->s_available+next]);
 
 		/* sleep until we have to send the next tuple */
 		if (next_is_R)
-			std::this_thread::sleep_for(w_ctx->stats.start_time + ctx->R.t_ns[ctx->r_available] - std::chrono::system_clock::now());
+			std::this_thread::sleep_for(w_ctx->stats.start_time 
+					+ ctx->R.t_ns[ctx->r_available+next] - std::chrono::system_clock::now());
 		else
-			std::this_thread::sleep_for(w_ctx->stats.start_time + ctx->S.t_ns[ctx->s_available] - std::chrono::system_clock::now());
+			std::this_thread::sleep_for(w_ctx->stats.start_time 
+					+ ctx->S.t_ns[ctx->s_available+next] - std::chrono::system_clock::now());
 
 		/*
 		 * TODO:
@@ -291,7 +336,7 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 
 		/* Update available tuple */
 		if (next_is_R){
-			ctx->r_available++;
+			ctx->r_available += master_batch_size;
 
 			/*
 			 * TODO.
@@ -301,13 +346,23 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 			/* Notify condition */
 			if (ctx->r_available >= ctx->r_processed + ctx->r_batch_size){
 				ctx->data_cv.notify_one();
+				/*auto end_batch = std::chrono::system_clock::now();
+				long r = std::chrono::duration_cast <std::chrono::milliseconds>(end_batch - start_batch).count();
+				if (r > 10)
+					std::cout << "Batch Time" << r << "\n";
+				start_batch = std::chrono::system_clock::now();*/
 			}
 		} else {
-			ctx->s_available++;
+			ctx->s_available += master_batch_size;
 
 			/* Notify condition */
 			if (ctx->s_available >= ctx->s_processed + ctx->s_batch_size){
 				ctx->data_cv.notify_one();
+				/*auto end_batch = std::chrono::system_clock::now();
+				long r = std::chrono::duration_cast <std::chrono::milliseconds>(end_batch - start_batch).count();
+				if (r > 10)
+					std::cout << "Batch Time" << r << "\n";
+				start_batch = std::chrono::system_clock::now();*/
 			}
 		}
 

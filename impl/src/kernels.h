@@ -19,5 +19,7 @@ __global__
 void compare_kernel_new_r(int *output_buffer, a_t* a, b_t* b, x_t* x, y_t* y, int s_count, int r_count);
 
 __global__
+void compare_kernel_new_s_atomics(int *output_buffer, int outsize, a_t* a, b_t* b, x_t* x, y_t* y, int s_count, int r_count);
+__global__
 void compare_kernel_new_r_atomics(int *output_buffer, int outsize, a_t* a, b_t* b, x_t* x, y_t* y, int s_count, int r_count);
 #endif /* KERNELS_H */

@@ -41,6 +41,15 @@ struct worker_ctx_t {
     std::condition_variable *data_cv;
     std::mutex *data_mutex;
 
+
+    /* minimum and maximum frequencies */
+    unsigned min_cpu_freq;
+    unsigned max_cpu_freq;
+
+    /* minimum and maximum frequencies */
+    unsigned min_gpu_freq;
+    unsigned max_gpu_freq;
+
     /**
     * Input data stream R
     */
@@ -64,6 +73,11 @@ struct worker_ctx_t {
      * defined in master.h
      */
     processing_mode_e processing_mode;
+
+
+    /* scale frequency of gpu, cpu or both */
+    frequency_mode_e frequency_mode;
+
 
     /* Pointer to the Buffer that the gpu uses to write to */
     int *gpu_output_buffer;

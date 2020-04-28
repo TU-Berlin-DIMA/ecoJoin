@@ -18,6 +18,12 @@ enum processing_mode_e{
 };
 
 
+enum frequency_mode_e {
+	gpu,
+	cpu,
+	both
+};
+
 struct master_ctx_t {
 
 	/** This queue handles the imput data of the R stream **/
@@ -75,6 +81,17 @@ struct master_ctx_t {
 	/* index of the newest currently available tuple*/
 	unsigned r_processed;
 	unsigned s_processed;
+	
+	/* minimum and maximum frequencies */
+	unsigned min_cpu_freq;
+	unsigned max_cpu_freq;
+
+	/* minimum and maximum frequencies */
+	unsigned min_gpu_freq;
+	unsigned max_gpu_freq;
+
+	/* scale frequency of gpu, cpu or both */
+	frequency_mode_e frequency_mode;
 
 	/* vars to lock x_available */
 	// See: https://en.cppreference.com/w/cpp/thread/condition_variable
