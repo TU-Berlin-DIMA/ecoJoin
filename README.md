@@ -1,4 +1,4 @@
-# Conducting a energy measure
+# Conducting an energy measure
 
 Start processing on jetson:<br>
 ```sudo python efficient-gpu-joins/impl/benchmark/zmq_bench.py [raspberry ip] [settings file] 0```
