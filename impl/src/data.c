@@ -50,7 +50,11 @@ generate_data (master_ctx_t *ctx)
     if (ctx->processing_mode == cpu1_mode
 		    || ctx->processing_mode == cpu2_mode
 		    || ctx->processing_mode == cpu3_mode
-		    || ctx->processing_mode == cpu4_mode){
+		    || ctx->processing_mode == cpu4_mode
+		    || ctx->processing_mode == ht_cpu1_mode
+		    || ctx->processing_mode == ht_cpu2_mode
+		    || ctx->processing_mode == ht_cpu3_mode
+		    || ctx->processing_mode == ht_cpu4_mode){
 	    /* FIXME: Consider NUMA here */
 	    ctx->R.t_ns = (std::chrono::nanoseconds*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.t_ns));
 	    ctx->R.x = (x_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.x));

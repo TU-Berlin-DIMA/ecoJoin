@@ -14,7 +14,11 @@ enum processing_mode_e{
 	cpu3_mode, 
 	cpu4_mode, 
 	gpu_mode,
-	atomic_mode
+	atomic_mode,
+	ht_cpu1_mode, 
+	ht_cpu2_mode, 
+	ht_cpu3_mode, 
+	ht_cpu4_mode
 };
 
 
@@ -124,13 +128,11 @@ struct master_ctx_t {
      */
     processing_mode_e processing_mode;
 
-	//struct {
-    //       unsigned int   pos;   /**< number of tuples already in the message */
-    //       result_msg_t   msg;   /**< the partial message itself */
-    //} partial_result_msg;
+	/* use a range prediacate to join */
+	bool range_predicate;
     
-      /* enbable time sleep */
-      bool time_sleep;
+	/* enbable time sleep */
+        bool time_sleep;
 
       /* manage time sleep in worker*/
       bool time_sleep_control_in_worker;

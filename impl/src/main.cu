@@ -37,7 +37,8 @@ static void usage(){
 	printf ("  -R RATE  tuple rate for stream S (in tuples/sec)\n");
 	printf ("  -w SIZE  window size for stream R (in seconds)\n");
 	printf ("  -W SIZE  window size for stream S (in seconds)\n");
-	printf ("  -p [cpu, gpu]  processing mode (cpu or gpu)\n");
+	printf ("  -p []  processing mode\n");
+	printf ("  -P enable range predicate\n");
 	printf ("  -s SEC  idle window time\n");
 	printf ("  -S SEC  process window time\n");
 	printf ("  -T enable sleep time window\n");
@@ -85,10 +86,10 @@ int main(int argc, char **argv) {
         ctx->gpu_blocksize = 128;
         ctx->enable_freq_scaling = false;
 	ctx->end_when_worker_ends = false;
-	
+	ctx->range_predicate = false;
 	
 	/* parse command lines */
-	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:f:F:e")) != -1)
+	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:f:F:eP")) != -1)
 	{
 		switch (ch)
 		{
@@ -136,8 +137,19 @@ int main(int argc, char **argv) {
 					ctx->processing_mode = gpu_mode;
 				else if (strncmp(optarg,"atomic",6) == 0)
 					ctx->processing_mode = atomic_mode;
+				else if (strncmp(optarg,"ht_cpu1",7) == 0)
+					ctx->processing_mode = ht_cpu1_mode;
+				else if (strncmp(optarg,"ht_cpu2",7) == 0)
+					ctx->processing_mode = ht_cpu2_mode;
+				else if (strncmp(optarg,"ht_cpu3",7) == 0)
+					ctx->processing_mode = ht_cpu3_mode;
+				else if (strncmp(optarg,"ht_cpu4",7) == 0)
+					ctx->processing_mode = ht_cpu4_mode;
 				else
 					ctx->processing_mode = cpu1_mode;
+				break;
+			case 'P':
+				ctx->range_predicate = true;
 				break;
 			case 's':
 				ctx->idle_window_time = strtol (optarg, NULL, 10) * 1000000;
@@ -256,6 +268,7 @@ int main(int argc, char **argv) {
 	w_ctx->enable_freq_scaling = ctx->enable_freq_scaling;
 	w_ctx->stop_signal = 0;
 	w_ctx->frequency_mode = ctx->frequency_mode;
+	w_ctx->range_predicate = ctx->range_predicate;
 		
 	/* Setup statistics*/
 	w_ctx->stats.processed_output_tuples = 0;
@@ -280,6 +293,19 @@ int main(int argc, char **argv) {
 		fprintf (ctx->outfile, "# Use GPU processing mode\n\n");
 	else if (ctx->processing_mode == atomic_mode)
 		fprintf (ctx->outfile, "# Use GPU atomic processing mode\n\n");
+	else if (ctx->processing_mode == ht_cpu1_mode)
+		fprintf (ctx->outfile, "# Use CPU 1 hash join processing mode\n\n");
+	else if (ctx->processing_mode == ht_cpu2_mode)
+		fprintf (ctx->outfile, "# Use CPU 2 hash join processing mode\n\n");
+	else if (ctx->processing_mode == ht_cpu3_mode)
+		fprintf (ctx->outfile, "# Use CPU 3 hash join processing mode\n\n");
+	else if (ctx->processing_mode == ht_cpu4_mode)
+		fprintf (ctx->outfile, "# Use CPU 4 hash join processing mode\n\n");
+
+	if (ctx->range_predicate)
+		fprintf (ctx->outfile, "# Use range predicate\n\n");
+	else
+		fprintf (ctx->outfile, "# Do not use range predicate\n\n");
 
 	fprintf (ctx->outfile, "# Start Stream\n");
 	std::thread first (start_stream, ctx, w_ctx);

@@ -1,5 +1,5 @@
-#ifndef HASH_JOIN_WORKER_H
-#define HASH_JOIN_WORKER_H
+#ifndef WORKER_H
+#define WORKER_H
 
 #include "config.h"
 #include "parameter.h"
@@ -16,7 +16,10 @@
 struct worker_ctx_t {
     /* stores statistics */
     statistics  stats;
-   
+
+    /* use a range prediacate to join */
+    bool range_predicate;
+
     /* Message to send already */
     struct {
         unsigned int   pos;   /**< number of tuples already in the message */
@@ -131,4 +134,5 @@ struct worker_ctx_t {
 
 
 void *start_worker(void *ctx);
-#endif  /* HASH_JOIN_WORKER_H */
+void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s);
+#endif  /* WORKER_H */

@@ -19,10 +19,13 @@
 #include "kernels.h"
 #include "cuda_helper.h"
 #include "dvs.h"
+#include "hash_join.h"
+#include "hash_join_multithreaded.h"
+#include "hash_join_atomic.h"
 
 /* --- forward declarations --- */
-static inline void emit_result (worker_ctx_t *ctx, unsigned int r,
-                                unsigned int s);
+//static inline void emit_result (worker_ctx_t *ctx, unsigned int r,
+//                                unsigned int s);
 void init_worker (worker_ctx_t *w_ctx);
 void process_s (worker_ctx_t *w_ctx);
 void process_r (worker_ctx_t *w_ctx);
@@ -46,6 +49,11 @@ void *start_worker(void *ctx){
 	time_t start = time(0);
 	auto idle_start_time = std::chrono::system_clock::now();
 	auto proc_start_time = std::chrono::system_clock::now();
+	
+	//----------------------------------------------------------------
+	mt_atomic::init_ht();
+	//----------------------------------------------------------------
+
 	
 	if(w_ctx->enable_freq_scaling)
         	set_freq(w_ctx->frequency_mode, w_ctx->max_cpu_freq, w_ctx->max_gpu_freq);
@@ -103,6 +111,7 @@ void *start_worker(void *ctx){
 
 		expire_outdated_tuples (w_ctx);
 	}
+	
 }
 
 void process_s (worker_ctx_t *w_ctx){
@@ -118,6 +127,10 @@ void process_s (worker_ctx_t *w_ctx){
 		process_s_gpu(w_ctx);
 	} else if (w_ctx->processing_mode == atomic_mode){
 		process_s_gpu_atomics(w_ctx);
+	} else if (w_ctx->processing_mode == ht_cpu1_mode){
+		//process_s_ht_cpu(w_ctx,1);
+		//mt_tbb::process_s_ht_cpu(w_ctx,1);
+		mt_atomic::process_s_ht_cpu(w_ctx,1);
 	}
 	w_ctx->stats.processed_input_tuples += w_ctx->s_batch_size;
 }
@@ -135,6 +148,10 @@ void process_r (worker_ctx_t *w_ctx){
 		process_r_gpu(w_ctx);
 	} else if (w_ctx->processing_mode == atomic_mode){
 		process_r_gpu_atomics(w_ctx);
+	} else if (w_ctx->processing_mode == ht_cpu1_mode){
+		mt_atomic::process_r_ht_cpu(w_ctx,1);
+		//mt_tbb::process_r_ht_cpu(w_ctx,1);
+		//process_r_ht_cpu(w_ctx,1);
 	}
 	w_ctx->stats.processed_input_tuples += w_ctx->r_batch_size;
 }
@@ -169,11 +186,21 @@ void process_s_gpu (worker_ctx_t *w_ctx){
 	if (r_processed - r_first > 0){
 		
 		/* Start kernel */
-		compare_kernel_new_s<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(w_ctx->gpu_output_buffer, 
+		if (w_ctx->range_predicate){
+			compare_kernel_new_s_range<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>
+				(w_ctx->gpu_output_buffer, 
 				&(w_ctx->S.a[s_processed]), &(w_ctx->S.b[s_processed]), 
 				&(w_ctx->R.x[r_first]), &(w_ctx->R.y[r_first]), 
 				w_ctx->s_batch_size,
 				r_processed - r_first);
+		} else {
+			compare_kernel_new_s<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>
+				(w_ctx->gpu_output_buffer, 
+				&(w_ctx->S.a[s_processed]), &(w_ctx->S.b[s_processed]), 
+				&(w_ctx->R.x[r_first]), &(w_ctx->R.y[r_first]), 
+				w_ctx->s_batch_size,
+				r_processed - r_first);
+		}
 
 		CUDA_SAFE(cudaDeviceSynchronize());
 		
@@ -199,11 +226,21 @@ void process_r_gpu (worker_ctx_t *w_ctx){
 	if (s_processed - s_first > 0){
 		
 		/* Start kernel */
-		compare_kernel_new_r<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(w_ctx->gpu_output_buffer, 
+		if (w_ctx->range_predicate){
+			compare_kernel_new_r_range<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>
+				(w_ctx->gpu_output_buffer, 
 				&(w_ctx->S.a[s_first]), &(w_ctx->S.b[s_first]), 
 				&(w_ctx->R.x[r_processed]), &(w_ctx->R.y[r_processed]), 
 				s_processed - s_first,
 				w_ctx->r_batch_size);
+		} else {
+			compare_kernel_new_r<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>
+				(w_ctx->gpu_output_buffer, 
+				&(w_ctx->S.a[s_first]), &(w_ctx->S.b[s_first]), 
+				&(w_ctx->R.x[r_processed]), &(w_ctx->R.y[r_processed]), 
+				s_processed - s_first,
+				w_ctx->r_batch_size);
+		}
 
 		CUDA_SAFE(cudaDeviceSynchronize());
 
@@ -224,12 +261,23 @@ void process_s_gpu_atomics (worker_ctx_t *w_ctx){
     	const unsigned r_processed = *(w_ctx->r_processed);
     	
 	if (r_processed - r_first > 0){
-		compare_kernel_new_s_atomics<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(w_ctx->gpu_output_buffer,
+		if (w_ctx->range_predicate){
+			compare_kernel_new_s_atomics_range<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>
+				(w_ctx->gpu_output_buffer,
 			       	w_ctx->gpu_output_buffer_size/8,
 				&(w_ctx->S.a[s_processed]), &(w_ctx->S.b[s_processed]), 
 				&(w_ctx->R.x[r_first]), &(w_ctx->R.y[r_first]), 
 				w_ctx->s_batch_size,
 				r_processed - r_first);
+		} else {
+			compare_kernel_new_s_atomics<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>
+				(w_ctx->gpu_output_buffer,
+			       	w_ctx->gpu_output_buffer_size/8,
+				&(w_ctx->S.a[s_processed]), &(w_ctx->S.b[s_processed]), 
+				&(w_ctx->R.x[r_first]), &(w_ctx->R.y[r_first]), 
+				w_ctx->s_batch_size,
+				r_processed - r_first);
+		}
 
 		CUDA_SAFE(cudaDeviceSynchronize());
 	}
@@ -258,12 +306,24 @@ void process_r_gpu_atomics (worker_ctx_t *w_ctx){
     	const unsigned s_processed = *(w_ctx->s_processed);
 	
 	if (s_processed - s_first > 0){
-		compare_kernel_new_r_atomics<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(w_ctx->gpu_output_buffer,
+		if (w_ctx->range_predicate){
+			compare_kernel_new_r_atomics_range<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>
+				(w_ctx->gpu_output_buffer,
 			       	w_ctx->gpu_output_buffer_size/8,
 				&(w_ctx->S.a[s_first]), &(w_ctx->S.b[s_first]), 
 				&(w_ctx->R.x[r_processed]), &(w_ctx->R.y[r_processed]), 
 				s_processed - s_first,
 				w_ctx->r_batch_size);
+		} else {
+			compare_kernel_new_r_atomics<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>
+				(w_ctx->gpu_output_buffer,
+			       	w_ctx->gpu_output_buffer_size/8,
+				&(w_ctx->S.a[s_first]), &(w_ctx->S.b[s_first]), 
+				&(w_ctx->R.x[r_processed]), &(w_ctx->R.y[r_processed]), 
+				s_processed - s_first,
+				w_ctx->r_batch_size);
+
+		}
 
 		CUDA_SAFE(cudaDeviceSynchronize());
 	}
@@ -338,10 +398,14 @@ void process_s_cpu (worker_ctx_t *w_ctx, unsigned threads){
 		for (unsigned int s = *(w_ctx->s_processed); s < *(w_ctx->s_processed) + w_ctx->s_batch_size;
 		    s++)
 		{
-			const a_t a = w_ctx->S.a[s] - w_ctx->R.x[r];
-			const b_t b = w_ctx->S.b[s] - w_ctx->R.y[r];
-			if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.)){
-			    emit_result (w_ctx, r, s);
+			if (w_ctx->range_predicate){
+				const a_t a = w_ctx->S.a[s] - w_ctx->R.x[r];
+				const b_t b = w_ctx->S.b[s] - w_ctx->R.y[r];
+				if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
+				    emit_result (w_ctx, r, s);
+			} else {
+				if (w_ctx->S.a[s] + w_ctx->S.b[s] == w_ctx->R.x[r] + w_ctx->R.y[r])
+				    emit_result (w_ctx, r, s);
 			}
 		}
 	}
@@ -359,10 +423,15 @@ void process_r_cpu (worker_ctx_t *w_ctx, unsigned threads){
 				r < *(w_ctx->r_processed) + w_ctx->r_batch_size;
 		   		r++)
 		{
-			const a_t a = w_ctx->S.a[s] - w_ctx->R.x[r];
-			const b_t b = w_ctx->S.b[s] - w_ctx->R.y[r];
-			if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
-			    emit_result (w_ctx, r, s);
+			if (w_ctx->range_predicate){
+				const a_t a = w_ctx->S.a[s] - w_ctx->R.x[r];
+				const b_t b = w_ctx->S.b[s] - w_ctx->R.y[r];
+				if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
+				    emit_result (w_ctx, r, s);
+			} else {
+				if (w_ctx->S.a[s] + w_ctx->S.b[s] == w_ctx->R.x[r] + w_ctx->R.y[r])
+				    emit_result (w_ctx, r, s);
+			}
 		}
 	}
 	
@@ -378,8 +447,7 @@ void process_r_cpu (worker_ctx_t *w_ctx, unsigned threads){
  *  Emit result is called every time a new tuple output tuple is produced
  *  We update our statistics data
  */ 
-static inline void
-emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s) 
+void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s) 
 {   
 	auto now = std::chrono::system_clock::now();
 	
@@ -395,6 +463,7 @@ emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 	}
 	//std::cout << r <<  " " << s << " " << *(w_ctx->s_available) <<  " " <<  *(w_ctx->s_processed) << " " << *(w_ctx->r_available) <<  " " <<  *(w_ctx->r_processed) << "\n";
 
+	//std::cout << w_ctx->S.a[s] << " " << w_ctx->S.b[s] << " " << w_ctx->R.x[r] << " " << w_ctx->R.y[r] << "\n";
 	/* Output tuple statistics */
 	w_ctx->stats.processed_output_tuples++;
 	//int sec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - w_ctx->stats.start_time ).count();
