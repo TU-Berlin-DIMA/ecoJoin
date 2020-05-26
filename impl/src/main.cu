@@ -20,6 +20,7 @@
 #include "assert.h"
 #include "string.h"
 #include "dvs.h"
+#include "hash_join_atomic.h"
 
 
 /* ----- forward declarations ----- */
@@ -335,14 +336,19 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	const int master_batch_size = 1;
 	const int next = master_batch_size + 1;
 
-
 	/* Measure time until batch is full */
 	auto start_batch = std::chrono::system_clock::now();
 
 	while (ctx->r_available < ctx->num_tuples_R || ctx->s_available < ctx->num_tuples_S) {
 
 		/* is the next tuple an R or an S tuple? */
-		next_is_R = (ctx->R.t_ns[ctx->r_available+next] < ctx->S.t_ns[ctx->s_available+next]);
+		if (ctx->r_available >= ctx->num_tuples_R){
+			next_is_R = false; // R Stream ended
+		} else if (ctx->s_available >= ctx->num_tuples_S) {
+			next_is_R = true;  // S Stream ended
+		} else {
+			next_is_R = (ctx->R.t_ns[ctx->r_available+next] < ctx->S.t_ns[ctx->s_available+next]);
+		}
 
 		/* sleep until we have to send the next tuple */
 		if (next_is_R)
@@ -438,6 +444,7 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 
 	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->resultfile, ctx);
 	write_histogram_stats(&(w_ctx->stats), "output_tuple_stats.csv");
+	mt_atomic::print_ht();
 
 	exit(0);
 }
