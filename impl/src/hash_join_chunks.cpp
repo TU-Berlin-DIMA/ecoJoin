@@ -99,7 +99,6 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 
 
 	// Delete R HT
-	/*
 	const unsigned s_processed = *(w_ctx->s_processed);
 //#pragma omp parallel for
 	for (size_t i = 0; i < ht_size; i += 2){
@@ -127,7 +126,6 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 			}
 		}
 	}
-	*/
         *(w_ctx->s_processed) += w_ctx->s_batch_size;
 }
 
@@ -189,7 +187,6 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 	// Delete S HT
 	const unsigned r_processed = *(w_ctx->r_processed);
 //#pragma omp parallel for
-	/*
 	for (size_t i = 0; i < ht_size; i += 2){
 		const uint64_t tpl_cnt = hmS[i+1];
 		if (tpl_cnt != 0) { // non-empty
@@ -215,7 +212,7 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 
 			}
 		}
-	}*/
+	}
 
 
         *(w_ctx->r_processed) += w_ctx->r_batch_size;
