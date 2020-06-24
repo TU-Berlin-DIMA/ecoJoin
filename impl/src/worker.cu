@@ -22,6 +22,7 @@
 #include "hash_join.h"
 #include "hash_join_multithreaded.h"
 #include "hash_join_atomic.h"
+#include "hash_join_chunk_chaining.h"
 
 /* --- forward declarations --- */
 //static inline void emit_result (worker_ctx_t *ctx, unsigned int r,
@@ -40,7 +41,7 @@ void interprete_r (worker_ctx_t *w_ctx, int *bitmap);
 void expire_outdated_tuples (worker_ctx_t *w_ctx);
 
 /*
- * woker
+ * worker
  */
 void *start_worker(void *ctx){
 	worker_ctx_t *w_ctx = (worker_ctx_t *) ctx;
@@ -51,66 +52,78 @@ void *start_worker(void *ctx){
 	auto proc_start_time = std::chrono::system_clock::now();
 	
 	//----------------------------------------------------------------
-	mt_atomic::init_ht();
+	mt_atomic_chunk::init_ht();
 	//----------------------------------------------------------------
 
 	
 	if(w_ctx->enable_freq_scaling)
         	set_freq(w_ctx->frequency_mode, w_ctx->max_cpu_freq, w_ctx->max_gpu_freq);
+
+	omp_set_num_threads(4);
+	#pragma omp parallel
+        {
 	
-	while (true)
-   	{
-		/* Stats */	
-		proc_start_time = std::chrono::system_clock::now();
-		w_ctx->stats.runtime_proc += std::chrono::duration_cast
-			<std::chrono::milliseconds>(proc_start_time - idle_start_time).count();
-		idle_start_time = std::chrono::system_clock::now();
+		while (true)
+		{
+			#pragma omp master
+			{
+				/* Stats */	
+				proc_start_time = std::chrono::system_clock::now();
+				w_ctx->stats.runtime_proc += std::chrono::duration_cast
+					<std::chrono::milliseconds>(proc_start_time - idle_start_time).count();
+				idle_start_time = std::chrono::system_clock::now();
 
-		/* Wait until main releases the lock and enough data arrived
-		 * Using conditional variables we avoid busy waiting
-		 */
-		if ((*(w_ctx->r_available) < *(w_ctx->r_processed) + w_ctx->r_batch_size)
-                           && (*(w_ctx->s_available) < *(w_ctx->s_processed) + w_ctx->s_batch_size)){
+				/* Wait until main releases the lock and enough data arrived
+				 * Using conditional variables we avoid busy waiting
+				 */
+				if ((*(w_ctx->r_available) < *(w_ctx->r_processed) + w_ctx->r_batch_size)
+					   && (*(w_ctx->s_available) < *(w_ctx->s_processed) + w_ctx->s_batch_size)){
 
+						
+					if(w_ctx->enable_freq_scaling)
+						set_freq(w_ctx->frequency_mode, w_ctx->min_cpu_freq, w_ctx->min_gpu_freq);
+						
+					// Waiting signal for master 
+					w_ctx->stop_signal = true;
+						
+					std::unique_lock<std::mutex> lk(*(w_ctx->data_mutex));
+					//w_ctx->data_cv->wait(lk, [&](){return (true);});
+					w_ctx->data_cv->wait(lk, [&](){return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
+						   || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size);});
+
+					w_ctx->stop_signal = false;
 				
-			if(w_ctx->enable_freq_scaling)
-				set_freq(w_ctx->frequency_mode, w_ctx->min_cpu_freq, w_ctx->min_gpu_freq);
+					if(w_ctx->enable_freq_scaling)
+						set_freq(w_ctx->frequency_mode, w_ctx->max_cpu_freq, w_ctx->max_gpu_freq);
 				
-			// Waiting signal for master 
-			w_ctx->stop_signal = true;
-			
-			std::unique_lock<std::mutex> lk(*(w_ctx->data_mutex));
-			//w_ctx->data_cv->wait(lk, [&](){return (true);});
-			w_ctx->data_cv->wait(lk, [&](){return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
-                	           || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size);});
+					w_ctx->stats.switches_to_proc++;
+				}
 
-			w_ctx->stop_signal = false;
-		
-			if(w_ctx->enable_freq_scaling)
-				set_freq(w_ctx->frequency_mode, w_ctx->max_cpu_freq, w_ctx->max_gpu_freq);
-		
-			w_ctx->stats.switches_to_proc++;
+				/* Stats */	
+				idle_start_time = std::chrono::system_clock::now();
+				w_ctx->stats.runtime_idle += std::chrono::duration_cast
+					<std::chrono::milliseconds>(idle_start_time - proc_start_time).count();
+				proc_start_time = std::chrono::system_clock::now();
+				
+			}
+
+
+#pragma omp barrier
+			/* process TUPLES_PER_CHUNK_R if there are that many tuples available */
+			if (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size) {
+			    process_r (w_ctx);
+			}
+#pragma omp barrier
+
+			/* process TUPLES_PER_CHUNK_S if there are that many tuples available */
+			if (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size){
+			    process_s (w_ctx);
+			}
+	
+			#pragma omp master
+			expire_outdated_tuples (w_ctx);
 		}
-
-		/* Stats */	
-		idle_start_time = std::chrono::system_clock::now();
-		w_ctx->stats.runtime_idle += std::chrono::duration_cast
-			<std::chrono::milliseconds>(idle_start_time - proc_start_time).count();
-		proc_start_time = std::chrono::system_clock::now();
-
-		/* process TUPLES_PER_CHUNK_R if there are that many tuples available */
-		if (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size) {
-		    process_r (w_ctx);
-		}
-
-		
-		/* process TUPLES_PER_CHUNK_S if there are that many tuples available */
-		if (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size){
-		    process_s (w_ctx);
-		}
-
-		expire_outdated_tuples (w_ctx);
-	}
+        }
 	
 }
 
@@ -130,8 +143,16 @@ void process_s (worker_ctx_t *w_ctx){
 	} else if (w_ctx->processing_mode == ht_cpu1_mode){
 		//process_s_ht_cpu(w_ctx,1);
 		//mt_tbb::process_s_ht_cpu(w_ctx,1);
-		mt_atomic::process_s_ht_cpu(w_ctx,1);
+		//mt_atomic::process_s_ht_cpu(w_ctx,1);
+		mt_atomic_chunk::process_s_ht_cpu(w_ctx,1);
+	} else if (w_ctx->processing_mode == ht_cpu2_mode){
+		mt_atomic_chunk::process_s_ht_cpu(w_ctx,2);
+	} else if (w_ctx->processing_mode == ht_cpu3_mode){
+		mt_atomic_chunk::process_s_ht_cpu(w_ctx,3);
+	} else if (w_ctx->processing_mode == ht_cpu4_mode){
+		mt_atomic_chunk::process_s_ht_cpu(w_ctx,4);
 	}
+	#pragma omp master
 	w_ctx->stats.processed_input_tuples += w_ctx->s_batch_size;
 }
 
@@ -149,10 +170,18 @@ void process_r (worker_ctx_t *w_ctx){
 	} else if (w_ctx->processing_mode == atomic_mode){
 		process_r_gpu_atomics(w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu1_mode){
-		mt_atomic::process_r_ht_cpu(w_ctx,1);
+		mt_atomic_chunk::process_r_ht_cpu(w_ctx,1);
+		//mt_atomic::process_r_ht_cpu(w_ctx,1);
 		//mt_tbb::process_r_ht_cpu(w_ctx,1);
 		//process_r_ht_cpu(w_ctx,1);
+	} else if (w_ctx->processing_mode == ht_cpu2_mode){
+		mt_atomic_chunk::process_r_ht_cpu(w_ctx,2);
+	} else if (w_ctx->processing_mode == ht_cpu3_mode){
+		mt_atomic_chunk::process_r_ht_cpu(w_ctx,3);
+	} else if (w_ctx->processing_mode == ht_cpu4_mode){
+		mt_atomic_chunk::process_r_ht_cpu(w_ctx,4);
 	}
+	#pragma omp master
 	w_ctx->stats.processed_input_tuples += w_ctx->r_batch_size;
 }
 
@@ -454,10 +483,12 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 	/* Choose the older tuple to calc the latency*/
 	if (w_ctx->S.t_ns[s] < w_ctx->R.t_ns[r]){
 		auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) - w_ctx->R.t_ns[r]);
+		//#pragma omp critical
 		w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>(w_ctx->stats.summed_latency + i);
 		//std::cout << "R: " << std::chrono::duration_cast <std::chrono::milliseconds>(i).count() << "\n";
 	} else { 
 		auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) - w_ctx->S.t_ns[s]);
+		//#pragma omp critical
 		w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>(w_ctx->stats.summed_latency + i);
 		//std::cout << "S: " << std::chrono::duration_cast <std::chrono::milliseconds>(i).count() << "\n";
 	}
@@ -465,14 +496,14 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 
 	//std::cout << w_ctx->S.a[s] << " " << w_ctx->S.b[s] << " " << w_ctx->R.x[r] << " " << w_ctx->R.y[r] << "\n";
 	/* Output tuple statistics */
+	#pragma omp atomic
 	w_ctx->stats.processed_output_tuples++;
 	//int sec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - w_ctx->stats.start_time ).count();
 	//w_ctx->stats.output_tuple_map[sec]++;
 }
 
-
 void
-expire_outdated_tuples (worker_ctx_t *w_ctx){
+expire_outdated_tuples_ (worker_ctx_t *w_ctx){
    	const int s_processed = *(w_ctx->s_processed);
    	const int r_processed = *(w_ctx->r_processed);
 
@@ -482,5 +513,17 @@ expire_outdated_tuples (worker_ctx_t *w_ctx){
 
 	while ((w_ctx->S.t_ns[w_ctx->s_first].count() + w_ctx->window_size_S*1000000000L) < w_ctx->R.t_ns[r_processed].count()){
 		 w_ctx->s_first++;
+	}
+}
+
+void
+expire_outdated_tuples (worker_ctx_t *w_ctx){
+	if (w_ctx->processing_mode == cpu1_mode
+        	|| w_ctx->processing_mode == cpu2_mode
+         	|| w_ctx->processing_mode == cpu3_mode 
+       		|| w_ctx->processing_mode == cpu4_mode
+       		|| w_ctx->processing_mode == gpu_mode
+       		|| w_ctx->processing_mode == atomic_mode) {
+		expire_outdated_tuples_ (w_ctx);
 	}
 }

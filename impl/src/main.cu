@@ -21,6 +21,7 @@
 #include "string.h"
 #include "dvs.h"
 #include "hash_join_atomic.h"
+#include "hash_join_chunk_chaining.h"
 
 
 /* ----- forward declarations ----- */
@@ -444,7 +445,7 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 
 	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->resultfile, ctx);
 	write_histogram_stats(&(w_ctx->stats), "output_tuple_stats.csv");
-	mt_atomic::print_ht();
+	mt_atomic_chunk::print_ht();
 
 	exit(0);
 }
