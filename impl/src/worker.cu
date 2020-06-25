@@ -10,6 +10,8 @@
 #include <sys/time.h>
 #include <bitset>
 #include <omp.h>
+#include <sstream>
+#include <atomic>
 
 #include "data.h"
 #include "master.h"
@@ -20,13 +22,12 @@
 #include "cuda_helper.h"
 #include "dvs.h"
 #include "hash_join.h"
+#include "murmur3.h"
 #include "hash_join_multithreaded.h"
 #include "hash_join_atomic.h"
 #include "hash_join_chunk_chaining.h"
 
 /* --- forward declarations --- */
-//static inline void emit_result (worker_ctx_t *ctx, unsigned int r,
-//                                unsigned int s);
 void init_worker (worker_ctx_t *w_ctx);
 void process_s (worker_ctx_t *w_ctx);
 void process_r (worker_ctx_t *w_ctx);
@@ -40,91 +41,88 @@ void interprete_s (worker_ctx_t *w_ctx, int *bitmap);
 void interprete_r (worker_ctx_t *w_ctx, int *bitmap);
 void expire_outdated_tuples (worker_ctx_t *w_ctx);
 
+std::chrono::time_point<std::chrono::system_clock> iasd;
 /*
- * worker
+ * worker main loop
  */
 void *start_worker(void *ctx){
 	worker_ctx_t *w_ctx = (worker_ctx_t *) ctx;
 	init_worker(w_ctx);
 
-	time_t start = time(0);
-	auto idle_start_time = std::chrono::system_clock::now();
-	auto proc_start_time = std::chrono::system_clock::now();
-	
-	//----------------------------------------------------------------
-	mt_atomic_chunk::init_ht();
-	//----------------------------------------------------------------
-
-	
 	if(w_ctx->enable_freq_scaling)
         	set_freq(w_ctx->frequency_mode, w_ctx->max_cpu_freq, w_ctx->max_gpu_freq);
 
-	omp_set_num_threads(4);
-	#pragma omp parallel
-        {
+	iasd = std::chrono::system_clock::now();
+	w_ctx->idle_start_time = std::chrono::system_clock::now();
+	w_ctx->proc_start_time = std::chrono::system_clock::now();
 	
-		while (true)
-		{
-			#pragma omp master
-			{
-				/* Stats */	
-				proc_start_time = std::chrono::system_clock::now();
-				w_ctx->stats.runtime_proc += std::chrono::duration_cast
-					<std::chrono::milliseconds>(proc_start_time - idle_start_time).count();
-				idle_start_time = std::chrono::system_clock::now();
+	while (true)
+	{
+		/* Wait until main releases the lock and enough data arrived
+		 * Using conditional variables we avoid busy waiting
+		 */
+		if ((*(w_ctx->r_available) < *(w_ctx->r_processed) + w_ctx->r_batch_size)
+			   && (*(w_ctx->s_available) < *(w_ctx->s_processed) + w_ctx->s_batch_size)){
 
-				/* Wait until main releases the lock and enough data arrived
-				 * Using conditional variables we avoid busy waiting
-				 */
-				if ((*(w_ctx->r_available) < *(w_ctx->r_processed) + w_ctx->r_batch_size)
-					   && (*(w_ctx->s_available) < *(w_ctx->s_processed) + w_ctx->s_batch_size)){
-
-						
-					if(w_ctx->enable_freq_scaling)
-						set_freq(w_ctx->frequency_mode, w_ctx->min_cpu_freq, w_ctx->min_gpu_freq);
-						
-					// Waiting signal for master 
-					w_ctx->stop_signal = true;
-						
-					std::unique_lock<std::mutex> lk(*(w_ctx->data_mutex));
-					//w_ctx->data_cv->wait(lk, [&](){return (true);});
-					w_ctx->data_cv->wait(lk, [&](){return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
-						   || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size);});
-
-					w_ctx->stop_signal = false;
+			/* Stats */	
+			w_ctx->proc_start_time = std::chrono::system_clock::now();
+			w_ctx->stats.runtime_proc += std::chrono::duration_cast
+				<std::chrono::milliseconds>(w_ctx->proc_start_time - w_ctx->idle_start_time).count();
+			w_ctx->idle_start_time = std::chrono::system_clock::now();
 				
-					if(w_ctx->enable_freq_scaling)
-						set_freq(w_ctx->frequency_mode, w_ctx->max_cpu_freq, w_ctx->max_gpu_freq);
+			if(w_ctx->enable_freq_scaling)
+				set_freq(w_ctx->frequency_mode, w_ctx->min_cpu_freq, w_ctx->min_gpu_freq);
 				
-					w_ctx->stats.switches_to_proc++;
-				}
-
-				/* Stats */	
-				idle_start_time = std::chrono::system_clock::now();
-				w_ctx->stats.runtime_idle += std::chrono::duration_cast
-					<std::chrono::milliseconds>(idle_start_time - proc_start_time).count();
-				proc_start_time = std::chrono::system_clock::now();
+			// Waiting signal for master 
+			w_ctx->stop_signal = true;
 				
-			}
+			std::unique_lock<std::mutex> lk(*(w_ctx->data_mutex));
+			//w_ctx->data_cv->wait(lk, [&](){return (true);});
+			w_ctx->data_cv->wait(lk, [&](){return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
+				   || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size);});
 
+			w_ctx->stop_signal = false;
+		
+			if(w_ctx->enable_freq_scaling)
+				set_freq(w_ctx->frequency_mode, w_ctx->max_cpu_freq, w_ctx->max_gpu_freq);
+		
+			w_ctx->stats.switches_to_proc++;
 
-#pragma omp barrier
-			/* process TUPLES_PER_CHUNK_R if there are that many tuples available */
-			if (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size) {
-			    process_r (w_ctx);
-			}
-#pragma omp barrier
-
-			/* process TUPLES_PER_CHUNK_S if there are that many tuples available */
-			if (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size){
-			    process_s (w_ctx);
-			}
-	
-			#pragma omp master
-			expire_outdated_tuples (w_ctx);
+			/* Stats */	
+			w_ctx->idle_start_time = std::chrono::system_clock::now();
+			w_ctx->stats.runtime_idle += std::chrono::duration_cast
+				<std::chrono::milliseconds>(w_ctx->idle_start_time - w_ctx->proc_start_time).count();
+			w_ctx->proc_start_time = std::chrono::system_clock::now();
+			
 		}
-        }
+
+		/* process TUPLES_PER_CHUNK_R if there are that many tuples available */
+		if (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size){
+		    process_r (w_ctx);
+		}
+
+		/* process TUPLES_PER_CHUNK_S if there are that many tuples available */
+		if (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size){
+		    process_s (w_ctx);
+		}
 	
+		expire_outdated_tuples (w_ctx);
+	}
+}
+
+void end_processing(worker_ctx_t *w_ctx){
+	auto time = std::chrono::system_clock::now();
+	int proc = std::chrono::duration_cast<std::chrono::milliseconds>(time - iasd).count();
+	std::cout << proc << "\n";
+	if (w_ctx->stop_signal){
+		w_ctx->idle_start_time = std::chrono::system_clock::now();
+		w_ctx->stats.runtime_idle += std::chrono::duration_cast
+			<std::chrono::milliseconds>(w_ctx->idle_start_time - w_ctx->proc_start_time).count();	
+	} else {
+		w_ctx->proc_start_time = std::chrono::system_clock::now();
+                w_ctx->stats.runtime_proc += std::chrono::duration_cast
+                        <std::chrono::milliseconds>(w_ctx->proc_start_time - w_ctx->idle_start_time).count();
+	}
 }
 
 void process_s (worker_ctx_t *w_ctx){
@@ -152,7 +150,6 @@ void process_s (worker_ctx_t *w_ctx){
 	} else if (w_ctx->processing_mode == ht_cpu4_mode){
 		mt_atomic_chunk::process_s_ht_cpu(w_ctx,4);
 	}
-	#pragma omp master
 	w_ctx->stats.processed_input_tuples += w_ctx->s_batch_size;
 }
 
@@ -181,12 +178,10 @@ void process_r (worker_ctx_t *w_ctx){
 	} else if (w_ctx->processing_mode == ht_cpu4_mode){
 		mt_atomic_chunk::process_r_ht_cpu(w_ctx,4);
 	}
-	#pragma omp master
 	w_ctx->stats.processed_input_tuples += w_ctx->r_batch_size;
 }
 
 void init_worker (worker_ctx_t *w_ctx){
-
 	/* Allocate output buffer */
 	if (w_ctx->processing_mode == gpu_mode ||
 			w_ctx->processing_mode == atomic_mode){
@@ -200,6 +195,14 @@ void init_worker (worker_ctx_t *w_ctx){
 		CUDA_SAFE(cudaHostAlloc((void**)&(w_ctx->gpu_output_buffer), w_ctx->gpu_output_buffer_size, 0));
 		std::memset(w_ctx->gpu_output_buffer, 0, w_ctx->gpu_output_buffer_size);
 	}
+
+	if (w_ctx->processing_mode == ht_cpu1_mode ||
+		w_ctx->processing_mode == ht_cpu2_mode ||
+		w_ctx->processing_mode == ht_cpu3_mode || 
+		w_ctx->processing_mode == ht_cpu4_mode) {
+		mt_atomic_chunk::init_ht();
+	}
+		
 }
 
 /* Process TUPLES_PER_CHUNK_S Tuples on the gpu with nested loop join
@@ -496,8 +499,8 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 
 	//std::cout << w_ctx->S.a[s] << " " << w_ctx->S.b[s] << " " << w_ctx->R.x[r] << " " << w_ctx->R.y[r] << "\n";
 	/* Output tuple statistics */
-	#pragma omp atomic
-	w_ctx->stats.processed_output_tuples++;
+	//#pragma omp atomic
+	//w_ctx->stats.processed_output_tuples++;
 	//int sec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - w_ctx->stats.start_time ).count();
 	//w_ctx->stats.output_tuple_map[sec]++;
 }

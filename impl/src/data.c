@@ -1,13 +1,3 @@
-/**
- * @file
- *
- * Generate input data for handshake join
- *
- * @author Jens Teubner <jens.teubner@inf.ethz.ch>
- *
- * $Id$
- */
-
 #include "data.h"
 
 #include <assert.h>

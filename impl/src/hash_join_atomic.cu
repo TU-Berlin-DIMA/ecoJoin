@@ -12,8 +12,8 @@
 
 static const long n_sec = 1000000000L;
 
-static const int ht_size = 2000000;
-static const int max_try = 100000;
+static const int ht_size = 200000;
+static const int max_try = ht_size;
 
 using namespace std;
 
@@ -39,7 +39,7 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
         for (unsigned s = *(w_ctx->s_processed);
             s < *(w_ctx->s_processed) + w_ctx->s_batch_size;
             s++){
-                const uint32_t k = w_ctx->S.a[s] + w_ctx->S.b[s];
+                const uint32_t k = (uint32_t) w_ctx->S.a[s] + (uint32_t) w_ctx->S.b[s];
 		uint32_t hash;
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 
@@ -47,14 +47,15 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		
 		for (int i= 0; i < max_try; i++){
 			uint32_t u = 0;
-			if (!atomic_compare_exchange_strong(&hmS[hash] ,&u, k)){
-				hash += 2;
-				if(hash >= ht_size*2)
-					hash = 0;
-			} else {  // swapped
-				hmS[hash+1] = s;
-				break;
+			if (hmS[hash] == 0){
+				if (atomic_compare_exchange_strong(&hmS[hash] ,&u, k)){ // Swapped
+					hmS[hash+1] = s;
+					break;
+				}
 			}
+			hash += 2;
+			if(hash >= ht_size*2)
+				hash = 0;
 		}
         }
 
@@ -63,7 +64,7 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
         for (unsigned s = *(w_ctx->s_processed);
             s < *(w_ctx->s_processed) + w_ctx->s_batch_size;
             s++){
-		const uint32_t k = w_ctx->S.a[s] + w_ctx->S.b[s];
+		const uint32_t k = (uint32_t) w_ctx->S.a[s] + (uint32_t) w_ctx->S.b[s];
 		uint32_t hash;
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 
@@ -100,7 +101,7 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
         for (unsigned r = *(w_ctx->r_processed);
             r < *(w_ctx->r_processed) + w_ctx->r_batch_size;
             r++){
-                const uint32_t k = w_ctx->R.x[r] + w_ctx->R.y[r];
+                const uint32_t k = (uint32_t) w_ctx->R.x[r] + (uint32_t) w_ctx->R.y[r];
 		uint32_t hash;
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 
@@ -125,14 +126,13 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
         for (unsigned r = *(w_ctx->r_processed);
             r < *(w_ctx->r_processed) + w_ctx->r_batch_size;
             r++){
-		const uint32_t k = w_ctx->R.x[r] + w_ctx->R.y[r];
+		const uint32_t k = (uint32_t) w_ctx->R.x[r] + (uint32_t) w_ctx->R.y[r];
 		uint32_t hash;
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 
 		hash = (hash % ht_size)*2;
 		
 		for (int i= 0; i < max_try; i++){
-			//cout <<  hmS[hash] << " " << k << " " << i << "\n";
 			if (hmS[hash] == 0){ // Empty
 				break;
 			}
@@ -152,5 +152,24 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		}
         }
         *(w_ctx->r_processed) += w_ctx->r_batch_size;
+}
+
+void print_ht(){
+	int i = 0;
+	long z = 0;
+	for (int j = 0; j < ht_size *2; j++){
+		if (hmS[j] > 0)
+			i++;	
+		z += hmS[j];
+	}
+	cout << i << " " << z << "\n";
+	i= 0;
+	z= 0;
+	for (int j = 0; j < ht_size *2; j++){
+		if (hmR[j] > 0)
+			i++;	
+		z += hmR[j];
+	}
+	cout << i << " " << z << "\n";
 }
 }

@@ -271,6 +271,7 @@ int main(int argc, char **argv) {
 	w_ctx->stop_signal = 0;
 	w_ctx->frequency_mode = ctx->frequency_mode;
 	w_ctx->range_predicate = ctx->range_predicate;
+	w_ctx->resultfile = ctx->resultfile;
 		
 	/* Setup statistics*/
 	w_ctx->stats.processed_output_tuples = 0;
@@ -338,7 +339,7 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	const int next = master_batch_size + 1;
 
 	/* Measure time until batch is full */
-	auto start_batch = std::chrono::system_clock::now();
+	//auto start_batch = std::chrono::system_clock::now();
 
 	while (ctx->r_available < ctx->num_tuples_R || ctx->s_available < ctx->num_tuples_S) {
 
@@ -437,6 +438,8 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 		}
         }
 	
+	end_processing(w_ctx);
+
 	/* Statistics */
 	std::cout << "# Write Statistics \n";
 	w_ctx->stats.end_time = std::chrono::system_clock::now();
@@ -445,7 +448,7 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 
 	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->resultfile, ctx);
 	write_histogram_stats(&(w_ctx->stats), "output_tuple_stats.csv");
-	mt_atomic_chunk::print_ht();
+	mt_atomic_chunk::print_ht(w_ctx);
 
 	exit(0);
 }

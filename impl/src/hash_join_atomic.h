@@ -7,5 +7,6 @@ void init_ht();
 void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads);
 void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads);
 
+void print_ht();
 }
 #endif  /* HASH_JOIN_MT_AT_WORKER_H */

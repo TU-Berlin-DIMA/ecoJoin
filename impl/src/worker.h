@@ -1,6 +1,7 @@
 #ifndef WORKER_H
 #define WORKER_H
 
+#include <chrono>
 #include "config.h"
 #include "parameter.h"
 
@@ -26,7 +27,6 @@ struct worker_ctx_t {
         result_msg_t   msg;   /**< the partial message itself */
     } partial_result_msg;
 
-
     /* Current start of the window for r and s*/
     unsigned r_first;
     unsigned s_first;
@@ -39,11 +39,14 @@ struct worker_ctx_t {
     unsigned *r_processed;
     unsigned *s_processed;
 
+    /* keeps track of time spent idle or processing */ 
+    std::chrono::time_point<std::chrono::system_clock> proc_start_time;
+    std::chrono::time_point<std::chrono::system_clock> idle_start_time;
+    
     /* vars to lock x_available */
     // See: https://en.cppreference.com/w/cpp/thread/condition_variable
     std::condition_variable *data_cv;
     std::mutex *data_mutex;
-
 
     /* minimum and maximum frequencies */
     unsigned min_cpu_freq;
@@ -129,10 +132,14 @@ struct worker_ctx_t {
 
     /* Worker acks processing stop and finished statistics update */
     bool stop_signal_ack;
+
+    /** File to write the result tuples to  **/
+    FILE *resultfile;
 };
 
 
 
 void *start_worker(void *ctx);
+void end_processing(worker_ctx_t *w_ctx);
 void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s);
 #endif  /* WORKER_H */

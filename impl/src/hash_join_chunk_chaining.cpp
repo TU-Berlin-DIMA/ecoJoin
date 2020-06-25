@@ -11,14 +11,13 @@
 #include "radix_partition.cpp"
 #include "murmur3.h"
 
+using namespace std;
+
 static const long n_sec = 1000000000L;
 
-static const int tpl_per_chunk  = 30;
-static const int ht_size = 20000;
+static const int tpl_per_chunk  = 110;
+static const int ht_size = 80000;
 static const int max_try = ht_size;
-
-
-using namespace std;
 
 namespace mt_atomic_chunk {
 
@@ -51,7 +50,59 @@ void init_ht(){
 	}
 }
 
-void print_ht(){
+void print_ht_entries(worker_ctx_t *w_ctx){
+        for (int j = 0; j < ht_size; j++){
+                for (int i = 0; i < hmS[j].counter; i++){
+			fprintf (w_ctx->resultfile, "%d %d\n", 
+					((uint64_t*) hmS[j].address)[i*2], 
+					((uint64_t*) hmS[j].address)[i*2+1]);
+		}
+		fprintf (w_ctx->resultfile, "\n"); 
+
+        }
+ 
+	for (int j = 0; j < ht_size; j++){
+                for (int i = 0; i < hmR[j].counter; i++){
+			fprintf (w_ctx->resultfile, "%d %d\n", 
+					((uint64_t*) hmR[j].address)[i*2], 
+					((uint64_t*) hmR[j].address)[i*2+1]);
+		}
+		fprintf (w_ctx->resultfile, "\n"); 
+        }
+}
+
+void printTop10() {
+	// Top 10 entries:
+	vector<int> top10 = {0,0,0,0,0,0,0,0,0,0};
+	for (int j = 0; j < ht_size; j++){
+		for (int a = 0; a < 10; a++){
+			if (top10[a] < hmS[j].counter) {
+				top10[a] = hmS[j].counter;
+				break;
+			}
+		}
+        }
+	for (int a : top10){
+		cout << a << "\n";
+	}
+	cout << "\n";
+       	// Top 10 entries:
+	top10 = {0,0,0,0,0,0,0,0,0,0};
+	for (int j = 0; j < ht_size; j++){
+		for (int a = 0; a < 10; a++){
+			if (top10[a] < hmR[j].counter) {
+				top10[a] = hmR[j].counter;
+				break;
+			}
+		}
+        }
+	for (int a : top10){
+		cout << a << "\n";
+	}
+        
+}
+
+void print_ht(worker_ctx_t *w_ctx){
         int i = 0;
         long z = 0;
         for (int j = 0; j < ht_size; j++){
@@ -60,6 +111,8 @@ void print_ht(){
                 z += j % hmS[j].counter;
         }
         cout << i << " " << z << "\n";
+
+
         i= 0;
         z= 0;
         for (int j = 0; j < ht_size; j++){
@@ -69,13 +122,45 @@ void print_ht(){
 
         }
         cout << i << " " << z << "\n";
+	printTop10();
+	print_ht_entries(w_ctx);
 }
 
+
+void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
+{
+        //auto now = std::chrono::system_clock::now();
+
+        /* Choose the older tuple to calc the latency*/
+        /*if (w_ctx->S.t_ns[s] < w_ctx->R.t_ns[r]){
+                auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) - w_ctx->R.t_ns[r]);
+                //#pragma omp critical
+                w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>(w_ctx->stats.summed_latency + i);
+                //std::cout << "R: " << std::chrono::duration_cast <std::chrono::milliseconds>(i).count() << "\n";
+        } else {
+                auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) - w_ctx->S.t_ns[s]);
+                //#pragma omp critical
+                w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>(w_ctx->stats.summed_latency + i);
+                //std::cout << "S: " << std::chrono::duration_cast <std::chrono::milliseconds>(i).count() << "\n";
+        }*/
+        //std::cout << r <<  " " << s << " " << *(w_ctx->s_available) <<  " " <<  *(w_ctx->s_processed) << " " << *(w_ctx->r_available) <<  " " <<  *(w_ctx->r_processed) << "\n";
+
+        //std::cout << w_ctx->S.a[s] << " " << w_ctx->S.b[s] << " " << w_ctx->R.x[r] << " " << w_ctx->R.y[r] << "\n";
+	// Print into resultfile
+	//fprintf (w_ctx->resultfile, "%d %d\n", r,s);
+
+        /* Output tuple statistics */
+        #pragma omp atomic
+        w_ctx->stats.processed_output_tuples++;
+}
+
+
+
 void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
-        //omp_set_num_threads(threads);
+        omp_set_num_threads(threads);
 
         // Build R HT
-#pragma omp for
+#pragma omp parallel for
         for (unsigned r = *(w_ctx->r_processed);
             r < *(w_ctx->r_processed) + w_ctx->r_batch_size;
             r++){
@@ -86,6 +171,7 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		hash = (hash % ht_size);
 		
 		uint32_t tpl_cntr = hmR[hash].counter.fetch_add(1,std::memory_order_relaxed);
+		//uint32_t tpl_cntr = hmR[hash].counter.fetch_add(1);
 
 		if (tpl_cntr == tpl_per_chunk) {
 			cout << "Chunk full\n";
@@ -98,7 +184,7 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
         }
 
         // Probe S HT
-#pragma omp for
+#pragma omp parallel for
         for (unsigned r = *(w_ctx->r_processed);
             r < *(w_ctx->r_processed) + w_ctx->r_batch_size;
             r++){
@@ -108,16 +194,16 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 		hash = (hash % ht_size);
 		
-		if (hmS[hash].counter != 0){ // Not empty
-			const uint32_t tpl_cntr = hmS[hash].counter;
-			uint64_t *cur_chunk = (uint64_t*) hmS[hash].address; // head
+		const uint32_t tpl_cntr = hmS[hash].counter.load(std::memory_order_relaxed);
+		if (tpl_cntr != 0){ // Not empty
+			const uint64_t *cur_chunk = (uint64_t*) hmS[hash].address; // head
 			for (int j = 0; j < tpl_cntr; j++){
 				if (cur_chunk[j*2] == k) { // match
 					const uint32_t s = cur_chunk[(j*2)+1];
 					//cout << "S: " << s << " " << k << "\n";
 					//if (! (w_ctx->S.t_ns[s].count() + w_ctx->window_size_S * n_sec)
 					//	< w_ctx->R.t_ns[r].count())
-						emit_result(w_ctx, r, s);
+					mt_atomic_chunk::emit_result(w_ctx, r, s);
 				}
 			}
 		}
@@ -153,15 +239,14 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		}
 	}*/
 
-#pragma omp master
         *(w_ctx->r_processed) += w_ctx->r_batch_size;
 }
 
 void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
-        //omp_set_num_threads(threads);
+        omp_set_num_threads(threads);
 
 	// Build S HT
-#pragma omp for 
+#pragma omp parallel for 
 	for (unsigned s = *(w_ctx->s_processed);
             s < *(w_ctx->s_processed) + w_ctx->s_batch_size;
             s++){
@@ -172,6 +257,7 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		hash = (hash % ht_size);
 		
 		uint32_t tpl_cntr = hmS[hash].counter.fetch_add(1,std::memory_order_relaxed);
+		//uint32_t tpl_cntr = hmS[hash].counter.fetch_add(1);
 
 		if (tpl_cntr == tpl_per_chunk) {
 			cout << "Chunk full\n";
@@ -184,7 +270,7 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
         }
 
         // Probe R HT
-#pragma omp for
+#pragma omp parallel for
         for (unsigned s = *(w_ctx->s_processed);
             s < *(w_ctx->s_processed) + w_ctx->s_batch_size;
             s++){
@@ -194,17 +280,17 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 		hash = (hash % ht_size);
 		
-		if (hmR[hash].counter != 0) { // Not empty
+		const uint32_t tpl_cntr = hmR[hash].counter.load(std::memory_order_relaxed);
+		if (tpl_cntr != 0) { // Not empty
 			//cout << "R: " << hmR[hash+1] << "\n";
-			const uint32_t tpl_cntr = hmR[hash].counter;
-			uint64_t *cur_chunk = (uint64_t*) hmR[hash].address; // head
+			const uint64_t *cur_chunk = (uint64_t*) hmR[hash].address; // head
 			for (int j = 0; j < tpl_cntr; j++){
 				if (cur_chunk[j*2] == k) { // match
 					const uint32_t r = cur_chunk[(j*2)+1];
 					//cout << "R: " << r << " " << k << "\n";
 					//if (! (w_ctx->R.t_ns[r].count() + w_ctx->window_size_R * n_sec)
 					//	< w_ctx->S.t_ns[s].count())
-						emit_result(w_ctx, r, s);
+					mt_atomic_chunk::emit_result(w_ctx, r, s);
 				}
 			}
 		}
@@ -238,7 +324,6 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 			}
 		}
 	}*/
-#pragma omp master
         *(w_ctx->s_processed) += w_ctx->s_batch_size;
 }
 }
