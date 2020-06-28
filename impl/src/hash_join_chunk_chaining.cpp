@@ -10,8 +10,11 @@
 #include "worker.h"
 #include "radix_partition.cpp"
 #include "murmur3.h"
+#include "hash_join_chunk_chaining.h"
 
 using namespace std;
+
+namespace mt_atomic_chunk {
 
 static const long n_sec = 1000000000L;
 
@@ -19,15 +22,16 @@ static const int tpl_per_chunk  = 110;
 static const int ht_size = 80000;
 static const int max_try = ht_size;
 
-namespace mt_atomic_chunk {
-
 static const int cacheline_size = 64;
 static const int chunk_size = tpl_per_chunk * sizeof(uint32_t) * 2;
+
+/* keep track of processed tuples */
+std::atomic<uint32_t> processed_tuples;
 
 struct ht{
 	atomic<uint32_t> counter;
 	uint64_t address;
-}; 
+}; // 16 Byte
 
 ht *hmR;
 ht *hmS;
@@ -110,7 +114,7 @@ void print_ht(worker_ctx_t *w_ctx){
                         i++;
                 z += j % hmS[j].counter;
         }
-        cout << i << " " << z << "\n";
+        cout << "S: Used HT slots: " << i << " HT content hash: " << z << "\n";
 
 
         i= 0;
@@ -121,37 +125,30 @@ void print_ht(worker_ctx_t *w_ctx){
                 z += j % hmR[j].counter;
 
         }
-        cout << i << " " << z << "\n";
-	printTop10();
-	print_ht_entries(w_ctx);
+        cout << "R: Used HT slots: " << i << " HT content hash: " << z << "\n";
+	//printTop10();
+	//print_ht_entries(w_ctx);
 }
 
 
 void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 {
-        //auto now = std::chrono::system_clock::now();
-
+	// Calculate Latency
+	// INFLUENCES MULTITHREADED PERFORMANCE SIGNIFICANTLY:
         /* Choose the older tuple to calc the latency*/
-        /*if (w_ctx->S.t_ns[s] < w_ctx->R.t_ns[r]){
+        /*auto now = std::chrono::system_clock::now();
+        if (w_ctx->S.t_ns[s] < w_ctx->R.t_ns[r]){
                 auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) - w_ctx->R.t_ns[r]);
-                //#pragma omp critical
+                #pragma omp critical
                 w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>(w_ctx->stats.summed_latency + i);
-                //std::cout << "R: " << std::chrono::duration_cast <std::chrono::milliseconds>(i).count() << "\n";
         } else {
                 auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) - w_ctx->S.t_ns[s]);
-                //#pragma omp critical
+                #pragma omp critical
                 w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>(w_ctx->stats.summed_latency + i);
-                //std::cout << "S: " << std::chrono::duration_cast <std::chrono::milliseconds>(i).count() << "\n";
         }*/
-        //std::cout << r <<  " " << s << " " << *(w_ctx->s_available) <<  " " <<  *(w_ctx->s_processed) << " " << *(w_ctx->r_available) <<  " " <<  *(w_ctx->r_processed) << "\n";
-
-        //std::cout << w_ctx->S.a[s] << " " << w_ctx->S.b[s] << " " << w_ctx->R.x[r] << " " << w_ctx->R.y[r] << "\n";
+	
 	// Print into resultfile
 	//fprintf (w_ctx->resultfile, "%d %d\n", r,s);
-
-        /* Output tuple statistics */
-        #pragma omp atomic
-        w_ctx->stats.processed_output_tuples++;
 }
 
 
@@ -171,7 +168,6 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		hash = (hash % ht_size);
 		
 		uint32_t tpl_cntr = hmR[hash].counter.fetch_add(1,std::memory_order_relaxed);
-		//uint32_t tpl_cntr = hmR[hash].counter.fetch_add(1);
 
 		if (tpl_cntr == tpl_per_chunk) {
 			cout << "Chunk full\n";
@@ -180,7 +176,6 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 
 		((uint64_t*) hmR[hash].address)[tpl_cntr*2] = k; // key
 		((uint64_t*) hmR[hash].address)[(tpl_cntr*2)+1] = r; // value
-		//cout << "chunk r" << k << " "<< r << " " << tpl_cntr << " \n";
         }
 
         // Probe S HT
@@ -194,6 +189,7 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 		hash = (hash % ht_size);
 		
+		unsigned emitted_tuples = 0;
 		const uint32_t tpl_cntr = hmS[hash].counter.load(std::memory_order_relaxed);
 		if (tpl_cntr != 0){ // Not empty
 			const uint64_t *cur_chunk = (uint64_t*) hmS[hash].address; // head
@@ -204,9 +200,12 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 					//if (! (w_ctx->S.t_ns[s].count() + w_ctx->window_size_S * n_sec)
 					//	< w_ctx->R.t_ns[r].count())
 					mt_atomic_chunk::emit_result(w_ctx, r, s);
+					emitted_tuples++;
 				}
 			}
 		}
+		//w_ctx->stats.processed_output_tuples += emitted_tuples;
+		processed_tuples += emitted_tuples;
         }
 
 	/* Delete S HT
@@ -257,7 +256,6 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		hash = (hash % ht_size);
 		
 		uint32_t tpl_cntr = hmS[hash].counter.fetch_add(1,std::memory_order_relaxed);
-		//uint32_t tpl_cntr = hmS[hash].counter.fetch_add(1);
 
 		if (tpl_cntr == tpl_per_chunk) {
 			cout << "Chunk full\n";
@@ -266,7 +264,6 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 
 		((uint64_t*) hmS[hash].address)[tpl_cntr*2] = k; // key
 		((uint64_t*) hmS[hash].address)[(tpl_cntr*2)+1] = s; // value
-		//cout << "chunk s" << k << " "<< s << " " << tpl_cntr << " \n";
         }
 
         // Probe R HT
@@ -280,9 +277,9 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 		hash = (hash % ht_size);
 		
+		unsigned emitted_tuples = 0;
 		const uint32_t tpl_cntr = hmR[hash].counter.load(std::memory_order_relaxed);
 		if (tpl_cntr != 0) { // Not empty
-			//cout << "R: " << hmR[hash+1] << "\n";
 			const uint64_t *cur_chunk = (uint64_t*) hmR[hash].address; // head
 			for (int j = 0; j < tpl_cntr; j++){
 				if (cur_chunk[j*2] == k) { // match
@@ -291,9 +288,13 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 					//if (! (w_ctx->R.t_ns[r].count() + w_ctx->window_size_R * n_sec)
 					//	< w_ctx->S.t_ns[s].count())
 					mt_atomic_chunk::emit_result(w_ctx, r, s);
+					emitted_tuples++;
 				}
 			}
 		}
+        	//#pragma omp atomic
+		//w_ctx->stats.processed_output_tuples += emitted_tuples;
+		processed_tuples += emitted_tuples;
         }
 
 	// Delete R HT

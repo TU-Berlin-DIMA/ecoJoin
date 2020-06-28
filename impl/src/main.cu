@@ -448,7 +448,7 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 
 	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->resultfile, ctx);
 	write_histogram_stats(&(w_ctx->stats), "output_tuple_stats.csv");
-	mt_atomic_chunk::print_ht(w_ctx);
+	//mt_atomic_chunk::print_ht(w_ctx);
 
 	exit(0);
 }
