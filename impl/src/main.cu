@@ -87,7 +87,6 @@ int main(int argc, char **argv) {
         ctx->gpu_gridsize = 1;
         ctx->gpu_blocksize = 128;
         ctx->enable_freq_scaling = false;
-	ctx->end_when_worker_ends = false;
 	ctx->range_predicate = false;
 	
 	/* parse command lines */
@@ -207,9 +206,6 @@ int main(int argc, char **argv) {
 					std::cout << "GPU Frequency selection must be between 1 and 12\n";
 					exit(0);
 				}
-				break;
-			case 'e':
-				ctx->end_when_worker_ends = true;
 				break;
 			case 'h':
 			case '?':
@@ -398,33 +394,7 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 		}
 	}
 	fprintf (ctx->outfile, "# End of Stream\n");
-
-        if(ctx->end_when_worker_ends) {
-		fprintf (ctx->outfile, "# Wait for Worker to finish\n");
-
-		/* Process Remaining */
-	        while(true) {
-			/* hinder worker to add wrong batch size */
-			if (w_ctx->stop_signal 
-				&& ctx->r_available - ctx->r_processed != 0
-				&& ctx->s_available - ctx->s_processed != 0) {
-				//std::cout << "update batchsize\n";
-				/* update batch size */
-				w_ctx->r_batch_size = ctx->r_available - ctx->r_processed;
-				w_ctx->s_batch_size = ctx->s_available - ctx->s_processed;
-				ctx->data_cv.notify_one();
-				w_ctx->stop_signal = false;
-			}
-        		if (((ctx->r_available - ctx->r_processed - ctx->r_batch_size <= 0)
-        			&& (ctx->s_available - ctx->s_processed - ctx->s_batch_size <= 0))
-				&& w_ctx->stop_signal)
-				break;
-			std::cout << ctx->s_available - ctx->s_processed  << " " << ctx->r_available - ctx->r_processed << " "
-				<< w_ctx->stop_signal<< "\n";
-			usleep(1000000); /* 1 sec */
-		}
-        }
-	
+   
 	end_processing(w_ctx);
 
 	/* Statistics */
