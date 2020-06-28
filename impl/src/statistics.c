@@ -17,11 +17,11 @@ void print_statistics (statistics *stats, FILE *outfile, FILE *resultfile, maste
  	fprintf (outfile, "# Output Tuples       : %u\n", stats->processed_output_tuples);
         fprintf (outfile, "# Throughput (tuple/s): %f\n", 
 			stats->processed_output_tuples/((float)ctx->num_tuples_R/(float)ctx->rate_R));
-        fprintf (outfile, "# Average Latency (ms): %f\n", 
-			(float)stats->summed_latency.count()/(float)stats->processed_output_tuples*0.000001); /*ns to ms*/
-        fprintf (outfile, "# Runtime      (ms): %ld\n", stats->runtime);
-        fprintf (outfile, "# Runtime Idle (ms): %ld\n", stats->runtime_idle);
-        fprintf (outfile, "# Runtime Proc (ms): %ld\n", stats->runtime_proc);
+        fprintf (outfile, "# Average Latency (ns): %f\n", 
+			(float)stats->summed_latency.count()/(float)stats->processed_output_tuples);
+        fprintf (outfile, "# Runtime      (ns): %ld\n", stats->runtime);
+        fprintf (outfile, "# Runtime Idle (ns): %ld\n", stats->runtime_idle);
+        fprintf (outfile, "# Runtime Proc (ns): %ld\n", stats->runtime_proc);
         fprintf (outfile, "# Switches to Proc : %ld\n", stats->switches_to_proc);
         fprintf (outfile, "# Processed Input  : %ld\n", stats->processed_input_tuples);
 

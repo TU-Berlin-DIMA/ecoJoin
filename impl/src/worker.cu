@@ -75,7 +75,6 @@ void *start_worker(void *ctx){
 			w_ctx->stop_signal = true;
 				
 			std::unique_lock<std::mutex> lk(*(w_ctx->data_mutex));
-			//w_ctx->data_cv->wait(lk, [&](){return (true);});
 			w_ctx->data_cv->wait(lk, [&](){return (*(w_ctx->r_available) >= *(w_ctx->r_processed) + w_ctx->r_batch_size)
 				   || (*(w_ctx->s_available) >= *(w_ctx->s_processed) + w_ctx->s_batch_size);});
 
@@ -217,8 +216,6 @@ void process_s_gpu (worker_ctx_t *w_ctx){
     	const unsigned r_first = w_ctx->r_first;
     	const unsigned r_processed = *(w_ctx->r_processed);
     	
-	//assert (s_processed - *(w_ctx->s_available)) >= TUPLES_PER_CHUNK_S);
-
 	if (r_processed - r_first > 0){
 		
 		/* Start kernel */
@@ -257,8 +254,6 @@ void process_r_gpu (worker_ctx_t *w_ctx){
     	const unsigned s_first = w_ctx->s_first;
     	const unsigned s_processed = *(w_ctx->s_processed);
     	
-	//assert (s_processed - *(w_ctx->s_available)) >= TUPLES_PER_CHUNK_S);
-
 	if (s_processed - s_first > 0){
 		
 		/* Start kernel */
@@ -425,10 +420,10 @@ void interprete_r(worker_ctx_t *w_ctx, int *bitmap) {
     	}
 }
 
-/* Process TUPLES_PER_CHUNK_S Tuples on the cpu with nested loop join*/
+/* Process batch of tuples on the cpu with nested loop join */
 void process_s_cpu (worker_ctx_t *w_ctx, unsigned threads){
 	omp_set_num_threads(threads);
-	#pragma omp parallel for
+#pragma omp parallel for
 	for (unsigned int r = w_ctx->r_first; r < *(w_ctx->r_processed); r++)
 	{
 		for (unsigned int s = *(w_ctx->s_processed); s < *(w_ctx->s_processed) + w_ctx->s_batch_size;
@@ -449,10 +444,10 @@ void process_s_cpu (worker_ctx_t *w_ctx, unsigned threads){
 	*(w_ctx->s_processed) += w_ctx->s_batch_size;
 }
 
-/* Process TUPLES_PER_CHUNK_R Tuples on the cpu with nested loop join*/
+/* Process batch of tuples on the cpu with nested loop join */
 void process_r_cpu (worker_ctx_t *w_ctx, unsigned threads){
 	omp_set_num_threads(threads);
-	#pragma omp parallel for
+#pragma omp parallel for
 	for (unsigned int s = w_ctx->s_first; s < *(w_ctx->s_processed); s++)
         {
 		for (unsigned int r = *(w_ctx->r_processed); 
@@ -475,36 +470,27 @@ void process_r_cpu (worker_ctx_t *w_ctx, unsigned threads){
 }
 
 /*
- *  TODO: Daten nur in den Outbuffer schreiben
- *  Nicht vom compiler optimiert
- */
-
-/*
  *  Emit result is called every time a new tuple output tuple is produced
- *  We update our statistics data
  */ 
 void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s) 
-{   
+{   	
+	/* Choose the older tuple to calc the latency */
 	auto now = std::chrono::high_resolution_clock::now();
-	
-	/* Choose the older tuple to calc the latency*/
 	if (w_ctx->S.t_ns[s] < w_ctx->R.t_ns[r]){
-		auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) - w_ctx->R.t_ns[r]);
-		//#pragma omp critical
-		w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>(w_ctx->stats.summed_latency + i);
-		//std::cout << "R: " << std::chrono::duration_cast <std::chrono::nanoseconds>(i).count() << "\n";
+		auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>
+				(now -  w_ctx->stats.start_time) - w_ctx->R.t_ns[r]);
+		w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>
+			(w_ctx->stats.summed_latency + i);
 	} else { 
-		auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) - w_ctx->S.t_ns[s]);
-		//#pragma omp critical
-		w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>(w_ctx->stats.summed_latency + i);
-		//std::cout << "S: " << std::chrono::duration_cast <std::chrono::nanoseconds>(i).count() << "\n";
+		auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>
+				(now -  w_ctx->stats.start_time) - w_ctx->S.t_ns[s]);
+		w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>
+			(w_ctx->stats.summed_latency + i);
 	}
-	//std::cout << r <<  " " << s << " " << *(w_ctx->s_available) <<  " " <<  *(w_ctx->s_processed) << " " << *(w_ctx->r_available) <<  " " <<  *(w_ctx->r_processed) << "\n";
 
-	//std::cout << w_ctx->S.a[s] << " " << w_ctx->S.b[s] << " " << w_ctx->R.x[r] << " " << w_ctx->R.y[r] << "\n";
 	/* Output tuple statistics */
-	//#pragma omp atomic
-	//w_ctx->stats.processed_output_tuples++;
+	w_ctx->stats.processed_output_tuples++;
+	
 	//int sec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - w_ctx->stats.start_time ).count();
 	//w_ctx->stats.output_tuple_map[sec]++;
 }
@@ -514,11 +500,13 @@ expire_outdated_tuples_ (worker_ctx_t *w_ctx){
    	const int s_processed = *(w_ctx->s_processed);
    	const int r_processed = *(w_ctx->r_processed);
 
-	while ((w_ctx->R.t_ns[w_ctx->r_first].count() + w_ctx->window_size_R*1000000000L) < w_ctx->S.t_ns[s_processed].count()){
+	while ((w_ctx->R.t_ns[w_ctx->r_first].count() + w_ctx->window_size_R*1000000000L) 
+			< w_ctx->S.t_ns[s_processed].count()){
 		 w_ctx->r_first++;
 	}
 
-	while ((w_ctx->S.t_ns[w_ctx->s_first].count() + w_ctx->window_size_S*1000000000L) < w_ctx->R.t_ns[r_processed].count()){
+	while ((w_ctx->S.t_ns[w_ctx->s_first].count() + w_ctx->window_size_S*1000000000L) 
+			< w_ctx->R.t_ns[r_processed].count()){
 		 w_ctx->s_first++;
 	}
 }

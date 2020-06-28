@@ -329,7 +329,7 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	/* is the next tuple from the R stream */
 	bool next_is_R;
 
-	w_ctx->stats.start_time = std::chrono::system_clock::now();
+	w_ctx->stats.start_time = std::chrono::high_resolution_clock::now();
 	
 	/* time used for Process / Idle window control */
         time_t start = time(0);
@@ -337,9 +337,6 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 	/* size of tuple batch to release to the worker */
 	const int master_batch_size = 1;
 	const int next = master_batch_size + 1;
-
-	/* Measure time until batch is full */
-	//auto start_batch = std::chrono::system_clock::now();
 
 	while (ctx->r_available < ctx->num_tuples_R || ctx->s_available < ctx->num_tuples_S) {
 
@@ -355,10 +352,10 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 		/* sleep until we have to send the next tuple */
 		if (next_is_R)
 			std::this_thread::sleep_for(w_ctx->stats.start_time 
-					+ ctx->R.t_ns[ctx->r_available+next] - std::chrono::system_clock::now());
+					+ ctx->R.t_ns[ctx->r_available+next] - std::chrono::high_resolution_clock::now());
 		else
 			std::this_thread::sleep_for(w_ctx->stats.start_time 
-					+ ctx->S.t_ns[ctx->s_available+next] - std::chrono::system_clock::now());
+					+ ctx->S.t_ns[ctx->s_available+next] - std::chrono::high_resolution_clock::now());
 
 		/*
 		 * TODO:
@@ -380,11 +377,6 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 			/* Notify condition */
 			if (ctx->r_available >= ctx->r_processed + ctx->r_batch_size){
 				ctx->data_cv.notify_one();
-				/*auto end_batch = std::chrono::system_clock::now();
-				long r = std::chrono::duration_cast <std::chrono::milliseconds>(end_batch - start_batch).count();
-				if (r > 10)
-					std::cout << "Batch Time" << r << "\n";
-				start_batch = std::chrono::system_clock::now();*/
 			}
 		} else {
 			ctx->s_available += master_batch_size;
@@ -392,11 +384,6 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 			/* Notify condition */
 			if (ctx->s_available >= ctx->s_processed + ctx->s_batch_size){
 				ctx->data_cv.notify_one();
-				/*auto end_batch = std::chrono::system_clock::now();
-				long r = std::chrono::duration_cast <std::chrono::milliseconds>(end_batch - start_batch).count();
-				if (r > 10)
-					std::cout << "Batch Time" << r << "\n";
-				start_batch = std::chrono::system_clock::now();*/
 			}
 		}
 
@@ -442,9 +429,9 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 
 	/* Statistics */
 	std::cout << "# Write Statistics \n";
-	w_ctx->stats.end_time = std::chrono::system_clock::now();
+	w_ctx->stats.end_time = std::chrono::high_resolution_clock::now();
        	w_ctx->stats.runtime = std::chrono::duration_cast
-                        <std::chrono::milliseconds>(w_ctx->stats.end_time - w_ctx->stats.start_time).count();;
+                        <std::chrono::nanoseconds>(w_ctx->stats.end_time - w_ctx->stats.start_time).count();;
 
 	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->resultfile, ctx);
 	write_histogram_stats(&(w_ctx->stats), "output_tuple_stats.csv");
