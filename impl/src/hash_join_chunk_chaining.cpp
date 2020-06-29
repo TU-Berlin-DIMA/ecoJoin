@@ -208,35 +208,29 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		processed_tuples += emitted_tuples;
         }
 
-	/* Delete S HT
-	const unsigned r_processed = *(w_ctx->r_processed);
+	/* Delete S HT */
 #pragma omp parallel for
-	for (size_t i = 0; i < ht_size; i += 2){
-		const uint32_t tpl_cnt = hmS[i+1];
+	for (size_t i = 0; i < ht_size; i++){
+		const uint32_t tpl_cnt = hmS[i].counter.load(std::memory_order_relaxed);
 		if (tpl_cnt != 0) { // non-empty
-			atomic<uint32_t> *chunk = ((atomic<uint32_t>*) hmS[i].load()); // head
-			for( size_t j = 0; j < hmS[i+1]; j++){
-
-				const size_t s = chunk[j*2];
-
+			atomic<uint32_t> *chunk = (atomic<uint32_t>*) hmS[i].address; // head
+			for( size_t j = 0; j < tpl_cnt; j++){
+				const size_t s = chunk[j*2+1];
 				if ((w_ctx->S.t_ns[s].count() + w_ctx->window_size_S*n_sec) 
-						< w_ctx->R.t_ns[r_processed].count()){
-					
-					// (Re-)Move
-					for (int u = 0, l = 0; u < hmS[i+1]; u++){
+						< w_ctx->R.t_ns[*(w_ctx->r_processed)].count()){
+					// Remove + Move
+					for (int u = 0, l = 0; u < tpl_cnt; u++){
 						if (u != j || u != j+1){
 							uint32_t z = chunk[u].load();
 							chunk[l] = z;
 							l++;
 						}
 					}
-					hmS[i+1]--; // Update tpl count 
-					
+					hmS[i].counter--; // Update tpl counter
 				}
-
 			}
 		}
-	}*/
+	}
 
         *(w_ctx->r_processed) += w_ctx->r_batch_size;
 }
@@ -298,33 +292,28 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
         }
 
 	// Delete R HT
-	/*const unsigned s_processed = *(w_ctx->s_processed);
 #pragma omp parallel for
-	for (size_t i = 0; i < ht_size; i += 2){
-		const uint32_t tpl_cnt = hmR[i+1];
+	for (size_t i = 0; i < ht_size; i++){
+		const uint32_t tpl_cnt = hmR[i+1].counter.load(std::memory_order_relaxed);
 		if (tpl_cnt != 0) { // non-empty
-			atomic<uint32_t> *chunk = ((atomic<uint32_t>*) hmR[i].load()); // head
-			for( size_t j = 0; j < hmR[i+1]; j++){
-
-				const size_t r = chunk[j*2];
-
+			atomic<uint32_t> *chunk = (atomic<uint32_t>*) hmR[i].address; // head
+			for( size_t j = 0; j < tpl_cnt; j++){
+				const size_t r = chunk[j*2+1];
 				if ((w_ctx->R.t_ns[r].count() + w_ctx->window_size_R*n_sec) 
-						< w_ctx->S.t_ns[s_processed].count()){
-
-					// (Re-)Move
-					for (int u = 0, l = 0; u < hmR[i+1]; u++){
+						< w_ctx->S.t_ns[*(w_ctx->s_processed)].count()){
+					// Remove + Move
+					for (int u = 0, l = 0; u < tpl_cnt; u++){
 						if (u != j || u != j+1) {
 							uint32_t z = chunk[u].load();
 							chunk[l] = z;
 							l++;
 						}
 					}
-					hmR[i+1]--; // Update tpl count 
+					hmR[i].counter; // Update tpl count
 				}
-
 			}
 		}
-	}*/
+	}
         *(w_ctx->s_processed) += w_ctx->s_batch_size;
 }
 }
