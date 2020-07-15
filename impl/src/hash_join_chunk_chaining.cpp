@@ -294,7 +294,7 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 	// Delete R HT
 #pragma omp parallel for
 	for (size_t i = 0; i < ht_size; i++){
-		const uint32_t tpl_cnt = hmR[i+1].counter.load(std::memory_order_relaxed);
+		const uint32_t tpl_cnt = hmR[i].counter.load(std::memory_order_relaxed);
 		if (tpl_cnt != 0) { // non-empty
 			atomic<uint32_t> *chunk = (atomic<uint32_t>*) hmR[i].address; // head
 			for( size_t j = 0; j < tpl_cnt; j++){
