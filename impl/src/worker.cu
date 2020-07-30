@@ -40,6 +40,7 @@ void process_r_gpu_atomics (worker_ctx_t *w_ctx);
 void interprete_s (worker_ctx_t *w_ctx, int *bitmap);
 void interprete_r (worker_ctx_t *w_ctx, int *bitmap);
 void expire_outdated_tuples (worker_ctx_t *w_ctx);
+void set_num_of_threads (worker_ctx_t *w_ctx);
 
 /*
  * worker main loop
@@ -53,6 +54,8 @@ void *start_worker(void *ctx){
 
 	w_ctx->idle_start_time = std::chrono::high_resolution_clock::now();
 	w_ctx->proc_start_time = std::chrono::high_resolution_clock::now();
+	
+	set_num_of_threads(w_ctx);
 	
 	while (true)
 	{
@@ -126,6 +129,19 @@ void end_processing(worker_ctx_t *w_ctx){
 		|| w_ctx->processing_mode == ht_cpu4_mode){
 		w_ctx->stats.processed_output_tuples = mt_atomic_chunk::processed_tuples;
 	}
+}
+
+
+void set_num_of_threads (worker_ctx_t *w_ctx){
+	if (w_ctx->processing_mode == ht_cpu1_mode){
+		omp_set_num_threads(1);
+        } else if (w_ctx->processing_mode == ht_cpu2_mode){
+		omp_set_num_threads(2);
+        } else if (w_ctx->processing_mode == ht_cpu3_mode){
+		omp_set_num_threads(3);
+        } else if (w_ctx->processing_mode == ht_cpu4_mode){
+		omp_set_num_threads(4);
+        }
 }
 
 void process_s (worker_ctx_t *w_ctx){
