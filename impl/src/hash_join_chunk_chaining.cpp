@@ -154,7 +154,7 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 
 
 void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
-        omp_set_num_threads(threads);
+        //omp_set_num_threads(threads);
 
         // Build R HT
 #pragma omp parallel for
@@ -236,7 +236,7 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 }
 
 void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
-        omp_set_num_threads(threads);
+        //omp_set_num_threads(threads);
 
 	// Build S HT
 #pragma omp parallel for 
@@ -309,7 +309,7 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 							l++;
 						}
 					}
-					hmR[i].counter; // Update tpl count
+					hmR[i].counter--; // Update tpl count
 				}
 			}
 		}
