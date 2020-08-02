@@ -15,14 +15,18 @@
 using namespace std;
 
 namespace mt_atomic_chunk {
-
+// do not change
 static const long n_sec = 1000000000L;
-
-static const int tpl_per_chunk  = 110;
-static const int ht_size = 80000;
-static const int max_try = ht_size;
-
+static const int uint64_t_size = 64;
 static const int cacheline_size = 64;
+static const int tpl_per_chunk  = uint64_t_size;
+
+// Parameters
+static const int ht_size = 80000;
+static const int cleanup_threshold = 20;
+
+// do not change
+static const int max_try = ht_size;
 static const int chunk_size = tpl_per_chunk * sizeof(uint32_t) * 2;
 
 /* keep track of processed tuples */
@@ -35,6 +39,8 @@ struct ht{
 
 ht *hmR;
 ht *hmS;
+uint64_t *cleanupR;
+uint64_t *cleanupS;
 
 void init_ht(){
         posix_memalign((void**)&hmR, 64, ht_size*sizeof(ht));
@@ -52,6 +58,10 @@ void init_ht(){
 		hmS[i].address = (uint64_t)chunk;
 		hmS[i].counter = 0;
 	}
+
+	// Init clean-up bitmap
+	//posix_memalign((void**)&cleanupR, 64, cacheline_size*ht_size)
+	//posix_memalign((void**)&cleanupS, 64, cacheline_size*ht_size)
 }
 
 void print_ht_entries(worker_ctx_t *w_ctx){
@@ -197,10 +207,13 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 				if (cur_chunk[j*2] == k) { // match
 					const uint32_t s = cur_chunk[(j*2)+1];
 					//cout << "S: " << s << " " << k << "\n";
-					//if (! (w_ctx->S.t_ns[s].count() + w_ctx->window_size_S * n_sec)
-					//	< w_ctx->R.t_ns[r].count())
-					mt_atomic_chunk::emit_result(w_ctx, r, s);
-					emitted_tuples++;
+					if ((w_ctx->S.t_ns[s].count() + w_ctx->window_size_S * n_sec)
+						> w_ctx->R.t_ns[r].count()) { // Valid
+						mt_atomic_chunk::emit_result(w_ctx, r, s);
+						emitted_tuples++;
+					} /*else { // Unvalid
+						cleanupS[s] |= 1UL << j;
+					}*/
 				}
 			}
 		}
@@ -208,31 +221,30 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		processed_tuples += emitted_tuples;
         }
 
-	/* Delete S HT */
+        *(w_ctx->r_processed) += w_ctx->r_batch_size;
+
+	/* Clean-up S HT */
 #pragma omp parallel for
 	for (size_t i = 0; i < ht_size; i++){
-		const uint32_t tpl_cnt = hmS[i].counter.load(std::memory_order_relaxed);
-		if (tpl_cnt != 0) { // non-empty
-			atomic<uint32_t> *chunk = (atomic<uint32_t>*) hmS[i].address; // head
-			for( size_t j = 0; j < tpl_cnt; j++){
-				const size_t s = chunk[j*2+1];
-				if ((w_ctx->S.t_ns[s].count() + w_ctx->window_size_S*n_sec) 
-						< w_ctx->R.t_ns[*(w_ctx->r_processed)].count()){
-					// Remove + Move
-					for (int u = 0, l = 0; u < tpl_cnt; u++){
-						if (u != j || u != j+1){
-							uint32_t z = chunk[u].load();
-							chunk[l] = z;
-							l++;
-						}
+		uint32_t tpl_cnt = hmS[i].counter.load(std::memory_order_relaxed);
+		uint64_t *chunk = (uint64_t*) hmS[i].address; // head
+		for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
+			const size_t s = chunk[(j*2)+1];
+			if ((w_ctx->S.t_ns[s].count() + w_ctx->window_size_S * n_sec) 
+				< w_ctx->R.t_ns[*(w_ctx->r_processed)].count()) {
+				// Remove + Move
+				for (int u = 0, l = 0; u < tpl_cnt; u++) {
+					if ((u != j || u != j+1) && u != l) {
+						chunk[l*2] = chunk[u*2];
+						chunk[l*2+1] = chunk[u*2+1];
+						l++;
 					}
-					hmS[i].counter--; // Update tpl counter
 				}
+				tpl_cnt--;
+				hmS[i].counter--; // Update tpl counter
 			}
 		}
 	}
-
-        *(w_ctx->r_processed) += w_ctx->r_batch_size;
 }
 
 void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
@@ -260,6 +272,7 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		((uint64_t*) hmS[hash].address)[(tpl_cntr*2)+1] = s; // value
         }
 
+	//atomic<int> del(0);
         // Probe R HT
 #pragma omp parallel for
         for (unsigned s = *(w_ctx->s_processed);
@@ -279,10 +292,14 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 				if (cur_chunk[j*2] == k) { // match
 					const uint32_t r = cur_chunk[(j*2)+1];
 					//cout << "R: " << r << " " << k << "\n";
-					//if (! (w_ctx->R.t_ns[r].count() + w_ctx->window_size_R * n_sec)
-					//	< w_ctx->S.t_ns[s].count())
-					mt_atomic_chunk::emit_result(w_ctx, r, s);
-					emitted_tuples++;
+					if ((w_ctx->R.t_ns[r].count() + w_ctx->window_size_R * n_sec)
+						> w_ctx->S.t_ns[s].count()) {
+						mt_atomic_chunk::emit_result(w_ctx, r, s);
+						emitted_tuples++;
+					} /*else { // Unvalid
+						del++;
+						//cleanupR[r] |= 1UL << j;
+					}*/
 				}
 			}
 		}
@@ -290,30 +307,36 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 		//w_ctx->stats.processed_output_tuples += emitted_tuples;
 		processed_tuples += emitted_tuples;
         }
+	//cout << del << "\n";
 
-	// Delete R HT
+	/*std::bitset<bitwidth> bs(clearupR[r]);
+	if (bs.count() > cleanup_threshold) {
+	
+	}*/
+
+        *(w_ctx->s_processed) += w_ctx->s_batch_size;
+
+	// Clean-up S HT
 #pragma omp parallel for
 	for (size_t i = 0; i < ht_size; i++){
-		const uint32_t tpl_cnt = hmR[i].counter.load(std::memory_order_relaxed);
-		if (tpl_cnt != 0) { // non-empty
-			atomic<uint32_t> *chunk = (atomic<uint32_t>*) hmR[i].address; // head
-			for( size_t j = 0; j < tpl_cnt; j++){
-				const size_t r = chunk[j*2+1];
-				if ((w_ctx->R.t_ns[r].count() + w_ctx->window_size_R*n_sec) 
-						< w_ctx->S.t_ns[*(w_ctx->s_processed)].count()){
-					// Remove + Move
-					for (int u = 0, l = 0; u < tpl_cnt; u++){
-						if (u != j || u != j+1) {
-							uint32_t z = chunk[u].load();
-							chunk[l] = z;
-							l++;
-						}
+		uint32_t tpl_cnt = hmR[i].counter.load(std::memory_order_relaxed);
+		uint64_t *chunk = (uint64_t*) hmR[i].address; // head
+		for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
+			const size_t r = chunk[(j*2)+1];
+			if ((w_ctx->R.t_ns[r].count() + w_ctx->window_size_R * n_sec) 
+				< w_ctx->S.t_ns[*(w_ctx->s_processed)].count()) {
+				// Remove + Move
+				for (int u = 0, l = 0; u < tpl_cnt; u++) {
+					if ((u != j || u != j+1) && u != l) {
+						chunk[l*2] = chunk[u*2];
+						chunk[l*2+1] = chunk[u*2+1];
+						l++;
 					}
-					hmR[i].counter--; // Update tpl count
 				}
+				tpl_cnt--;
+				hmR[i].counter--; // Update tpl counter
 			}
 		}
 	}
-        *(w_ctx->s_processed) += w_ctx->s_batch_size;
 }
 }
