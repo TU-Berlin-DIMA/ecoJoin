@@ -163,8 +163,7 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 
 
 
-void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
-        //omp_set_num_threads(threads);
+void process_r_ht_cpu(worker_ctx_t *w_ctx){
 
         // Build R HT
 #pragma omp parallel for
@@ -224,7 +223,7 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
         *(w_ctx->r_processed) += w_ctx->r_batch_size;
 
 	/* Clean-up S HT */
-#pragma omp parallel for
+/*#pragma omp parallel for
 	for (size_t i = 0; i < ht_size; i++){
 		uint32_t tpl_cnt = hmS[i].counter.load(std::memory_order_relaxed);
 		uint64_t *chunk = (uint64_t*) hmS[i].address; // head
@@ -244,11 +243,10 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 				hmS[i].counter--; // Update tpl counter
 			}
 		}
-	}
+	}*/
 }
 
-void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
-        //omp_set_num_threads(threads);
+void process_s_ht_cpu(worker_ctx_t *w_ctx){
 
 	// Build S HT
 #pragma omp parallel for 
@@ -317,7 +315,7 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
         *(w_ctx->s_processed) += w_ctx->s_batch_size;
 
 	// Clean-up S HT
-#pragma omp parallel for
+/*#pragma omp parallel for
 	for (size_t i = 0; i < ht_size; i++){
 		uint32_t tpl_cnt = hmR[i].counter.load(std::memory_order_relaxed);
 		uint64_t *chunk = (uint64_t*) hmR[i].address; // head
@@ -337,6 +335,6 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads){
 				hmR[i].counter--; // Update tpl counter
 			}
 		}
-	}
+	}*/
 }
 }

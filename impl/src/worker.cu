@@ -161,13 +161,13 @@ void process_s (worker_ctx_t *w_ctx){
 		//process_s_ht_cpu(w_ctx,1);
 		//mt_tbb::process_s_ht_cpu(w_ctx,1);
 		//mt_atomic::process_s_ht_cpu(w_ctx,1);
-		mt_atomic_chunk::process_s_ht_cpu(w_ctx,1);
+		mt_atomic_chunk::process_s_ht_cpu(w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu2_mode){
-		mt_atomic_chunk::process_s_ht_cpu(w_ctx,2);
+		mt_atomic_chunk::process_s_ht_cpu(w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu3_mode){
-		mt_atomic_chunk::process_s_ht_cpu(w_ctx,3);
+		mt_atomic_chunk::process_s_ht_cpu(w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu4_mode){
-		mt_atomic_chunk::process_s_ht_cpu(w_ctx,4);
+		mt_atomic_chunk::process_s_ht_cpu(w_ctx);
 	}
 	w_ctx->stats.processed_input_tuples += w_ctx->s_batch_size;
 }
@@ -186,16 +186,16 @@ void process_r (worker_ctx_t *w_ctx){
 	} else if (w_ctx->processing_mode == atomic_mode){
 		process_r_gpu_atomics(w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu1_mode){
-		mt_atomic_chunk::process_r_ht_cpu(w_ctx,1);
+		mt_atomic_chunk::process_r_ht_cpu(w_ctx);
 		//mt_atomic::process_r_ht_cpu(w_ctx,1);
 		//mt_tbb::process_r_ht_cpu(w_ctx,1);
 		//process_r_ht_cpu(w_ctx,1);
 	} else if (w_ctx->processing_mode == ht_cpu2_mode){
-		mt_atomic_chunk::process_r_ht_cpu(w_ctx,2);
+		mt_atomic_chunk::process_r_ht_cpu(w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu3_mode){
-		mt_atomic_chunk::process_r_ht_cpu(w_ctx,3);
+		mt_atomic_chunk::process_r_ht_cpu(w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu4_mode){
-		mt_atomic_chunk::process_r_ht_cpu(w_ctx,4);
+		mt_atomic_chunk::process_r_ht_cpu(w_ctx);
 	}
 	w_ctx->stats.processed_input_tuples += w_ctx->r_batch_size;
 }

@@ -26,6 +26,7 @@
 
 /* ----- forward declarations ----- */
 static void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx);
+static void start_batch(master_ctx_t *ctx, worker_ctx_t *w_ctx);
 
 /**
  * Print usage information
@@ -51,6 +52,7 @@ static void usage(){
 	printf ("  -G NUM  GPU blocksize\n");
 	printf ("  -f enable frequency by stream join\n");
 	printf ("  -e end when worker ends\n");
+	printf ("  -z process data in one batch\n");
 }
 
 int main(int argc, char **argv) {
@@ -88,9 +90,10 @@ int main(int argc, char **argv) {
         ctx->gpu_blocksize = 128;
         ctx->enable_freq_scaling = false;
 	ctx->range_predicate = false;
+	ctx->batch_mode = false;
 	
 	/* parse command lines */
-	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:f:F:eP")) != -1)
+	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:f:F:ePz")) != -1)
 	{
 		switch (ch)
 		{
@@ -207,6 +210,9 @@ int main(int argc, char **argv) {
 					exit(0);
 				}
 				break;
+			case 'z':
+				ctx->batch_mode = true;
+				break;
 			case 'h':
 			case '?':
 			default:
@@ -306,17 +312,52 @@ int main(int argc, char **argv) {
 	else
 		fprintf (ctx->outfile, "# Do not use range predicate\n\n");
 
-	fprintf (ctx->outfile, "# Start Stream\n");
-	std::thread first (start_stream, ctx, w_ctx);
+	if (!ctx->batch_mode) {
+		fprintf (ctx->outfile, "# Start Stream\n");
+		std::thread first (start_stream, ctx, w_ctx);
+		
+		fprintf (ctx->outfile, "# Start Worker\n");
+		start_worker(w_ctx);
 
-	fprintf (ctx->outfile, "# Start Worker\n");
-	start_worker(w_ctx);
-	
-	first.join();
+		first.join();
+	} else {
+		fprintf (ctx->outfile, "# Process in one batch\n");
+		std::thread first (start_batch, ctx, w_ctx);
+
+		fprintf (ctx->outfile, "# Start Worker\n");
+		start_worker(w_ctx);
+		
+		first.join();
+	}
 
 	return EXIT_SUCCESS;
 }
 
+static void start_batch (master_ctx_t *ctx, worker_ctx_t *w_ctx){
+
+	/* Compute full batch */
+	ctx->r_available = ctx->num_tuples_R;
+	ctx->s_available = ctx->num_tuples_S;
+	ctx->data_cv.notify_one();
+
+	std::this_thread::sleep_for(std::chrono::seconds(5));
+	
+	end_processing(w_ctx);
+
+	/* Statistics */
+	std::cout << "# Write Statistics \n";
+	w_ctx->stats.end_time = std::chrono::high_resolution_clock::now();
+       	w_ctx->stats.runtime = std::chrono::duration_cast
+                        <std::chrono::nanoseconds>(w_ctx->stats.end_time - w_ctx->stats.start_time).count();;
+
+	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->resultfile, ctx);
+	//write_histogram_stats(&(w_ctx->stats), "output_tuple_stats.csv");
+	//mt_atomic_chunk::print_ht(w_ctx);
+
+	fprintf (ctx->outfile, "# Exit\n");
+	exit(0);
+
+}
 /**
  * Handles the stream queues
  */
@@ -353,14 +394,6 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 			std::this_thread::sleep_for(w_ctx->stats.start_time 
 					+ ctx->S.t_ns[ctx->s_available+next] - std::chrono::high_resolution_clock::now());
 
-		/*
-		 * TODO:
-		 * Verschiebe um throughput pro sec
-		 * schlafe 1 sec
-		 * Unterschied im Througput 
-		 * Auslastung CPU messen ohne worker
-		 */
-
 		/* Update available tuple */
 		if (next_is_R){
 			ctx->r_available += master_batch_size;
@@ -383,15 +416,16 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
 			}
 		}
 
+		/* Legacy: proc idle control was in master instead of worker 
 		if (ctx->time_sleep && !ctx->time_sleep_control_in_worker) {
-			/* Check if we are still in the process time window */
+			// Check if we are still in the process time window 
 			if (difftime( time(0), start) == ctx->process_window_time){
-				/* Start idle time window */
+				// Start idle time window 
 				usleep(ctx->idle_window_time);
 
 				start = time(0);
 			}
-		}
+		}*/
 	}
 	fprintf (ctx->outfile, "# End of Stream\n");
    

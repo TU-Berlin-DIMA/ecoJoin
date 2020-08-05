@@ -7,8 +7,8 @@ extern std::atomic<uint32_t> processed_tuples;
 
 void init_ht();
 
-void process_r_ht_cpu(worker_ctx_t *w_ctx, unsigned threads);
-void process_s_ht_cpu(worker_ctx_t *w_ctx, unsigned threads);
+void process_r_ht_cpu(worker_ctx_t *w_ctx);
+void process_s_ht_cpu(worker_ctx_t *w_ctx);
 
 void print_ht(worker_ctx_t *w_ctx);
 }

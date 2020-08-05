@@ -153,6 +153,9 @@ struct master_ctx_t {
 
       /* end when worker ends */ 
       bool end_when_worker_ends;
+      
+      /* process data in one batch instead of stream-wise */ 
+      bool batch_mode;
 };
 typedef struct master_ctx_t master_ctx_t;
 
