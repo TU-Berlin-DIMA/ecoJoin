@@ -141,7 +141,15 @@ void set_num_of_threads (worker_ctx_t *w_ctx){
 		omp_set_num_threads(3);
         } else if (w_ctx->processing_mode == ht_cpu4_mode){
 		omp_set_num_threads(4);
-        }
+       	} else if (w_ctx->processing_mode == cpu1_mode){
+		omp_set_num_threads(1);
+	} else if (w_ctx->processing_mode == cpu2_mode){
+		omp_set_num_threads(2);
+	} else if (w_ctx->processing_mode == cpu3_mode){
+		omp_set_num_threads(3);
+	} else if (w_ctx->processing_mode == cpu4_mode){
+		omp_set_num_threads(4);
+	}
 }
 
 void process_s (worker_ctx_t *w_ctx){
@@ -438,7 +446,7 @@ void interprete_r(worker_ctx_t *w_ctx, int *bitmap) {
 
 /* Process batch of tuples on the cpu with nested loop join */
 void process_s_cpu (worker_ctx_t *w_ctx, unsigned threads){
-	omp_set_num_threads(threads);
+	//omp_set_num_threads(threads);
 #pragma omp parallel for
 	for (unsigned int r = w_ctx->r_first; r < *(w_ctx->r_processed); r++)
 	{
@@ -462,7 +470,7 @@ void process_s_cpu (worker_ctx_t *w_ctx, unsigned threads){
 
 /* Process batch of tuples on the cpu with nested loop join */
 void process_r_cpu (worker_ctx_t *w_ctx, unsigned threads){
-	omp_set_num_threads(threads);
+	//omp_set_num_threads(threads);
 #pragma omp parallel for
 	for (unsigned int s = w_ctx->s_first; s < *(w_ctx->s_processed); s++)
         {

@@ -333,14 +333,19 @@ int main(int argc, char **argv) {
 	return EXIT_SUCCESS;
 }
 
+/**
+ * Process in batches instead of in streams (start_stream)
+ */
 static void start_batch (master_ctx_t *ctx, worker_ctx_t *w_ctx){
 
 	/* Compute full batch */
 	ctx->r_available = ctx->num_tuples_R;
 	ctx->s_available = ctx->num_tuples_S;
+	ctx->r_batch_size = ctx->num_tuples_R;
+	ctx->s_batch_size = ctx->num_tuples_S;
 	ctx->data_cv.notify_one();
 
-	std::this_thread::sleep_for(std::chrono::seconds(5));
+	std::this_thread::sleep_for(std::chrono::seconds(25));
 	
 	end_processing(w_ctx);
 
@@ -358,6 +363,7 @@ static void start_batch (master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	exit(0);
 
 }
+
 /**
  * Handles the stream queues
  */
