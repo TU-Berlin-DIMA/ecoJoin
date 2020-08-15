@@ -63,8 +63,8 @@ int main(int argc, char **argv) {
 	/* Setup Master */
 	ctx->result_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH,0);
 	ctx->outfile = stdout;
-	ctx->logfile = stdout;
-	ctx->resultfile = NULL;
+	ctx->logfile = fopen ("/dev/null", "w");
+	ctx->resultfile = fopen ("/dev/null", "w");
 	ctx->rate_S = 950;
 	ctx->rate_R = 950;
 	ctx->window_size_S = 600;
@@ -91,9 +91,10 @@ int main(int argc, char **argv) {
         ctx->enable_freq_scaling = false;
 	ctx->range_predicate = false;
 	ctx->batch_mode = false;
+	ctx->linear_data = false;
 	
 	/* parse command lines */
-	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:f:F:ePz")) != -1)
+	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:f:F:ePzl")) != -1)
 	{
 		switch (ch)
 		{
@@ -212,6 +213,9 @@ int main(int argc, char **argv) {
 				break;
 			case 'z':
 				ctx->batch_mode = true;
+				break;
+			case 'l':
+				ctx->linear_data = true;
 				break;
 			case 'h':
 			case '?':
@@ -339,10 +343,10 @@ int main(int argc, char **argv) {
 static void start_batch (master_ctx_t *ctx, worker_ctx_t *w_ctx){
 
 	/* Compute full batch */
-	ctx->r_available = ctx->num_tuples_R;
-	ctx->s_available = ctx->num_tuples_S;
-	ctx->r_batch_size = ctx->num_tuples_R;
-	ctx->s_batch_size = ctx->num_tuples_S;
+	w_ctx->r_available = &(ctx->num_tuples_R);
+	w_ctx->s_available = &(ctx->num_tuples_S);
+	w_ctx->r_batch_size = ctx->num_tuples_R;
+	w_ctx->s_batch_size = ctx->num_tuples_S;
 	ctx->data_cv.notify_one();
 
 	std::this_thread::sleep_for(std::chrono::seconds(25));
@@ -355,7 +359,7 @@ static void start_batch (master_ctx_t *ctx, worker_ctx_t *w_ctx){
        	w_ctx->stats.runtime = std::chrono::duration_cast
                         <std::chrono::nanoseconds>(w_ctx->stats.end_time - w_ctx->stats.start_time).count();;
 
-	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->resultfile, ctx);
+	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->logfile, ctx);
 	//write_histogram_stats(&(w_ctx->stats), "output_tuple_stats.csv");
 	//mt_atomic_chunk::print_ht(w_ctx);
 
@@ -443,7 +447,7 @@ static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
        	w_ctx->stats.runtime = std::chrono::duration_cast
                         <std::chrono::nanoseconds>(w_ctx->stats.end_time - w_ctx->stats.start_time).count();;
 
-	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->resultfile, ctx);
+	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->logfile, ctx);
 	write_histogram_stats(&(w_ctx->stats), "output_tuple_stats.csv");
 	//mt_atomic_chunk::print_ht(w_ctx);
 

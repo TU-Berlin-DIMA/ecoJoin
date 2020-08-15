@@ -124,12 +124,15 @@ struct master_ctx_t {
      * whether the join is processed on the cpu or gpu
      */
     processing_mode_e processing_mode;
-
-	/* use a range prediacate to join */
-	bool range_predicate;
     
-	/* enbable time sleep */
-        bool time_sleep;
+      /* Generate data randomly */
+      bool linear_data;
+
+      /* use a range prediacate to join */
+      bool range_predicate;
+    
+      /* enbable time sleep */
+      bool time_sleep;
 
       /* manage time sleep in worker*/
       bool time_sleep_control_in_worker;
