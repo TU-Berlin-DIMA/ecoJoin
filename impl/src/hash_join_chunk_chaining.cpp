@@ -167,15 +167,20 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 
 	auto start_time = std::chrono::high_resolution_clock::now();
         // Build R HT
-#pragma omp parallel for
+#pragma omp parallel for 
         for (unsigned r = *(w_ctx->r_processed);
             r < *(w_ctx->r_processed) + w_ctx->r_batch_size;
             r++){
                 const uint32_t k = w_ctx->R.x[r] + w_ctx->R.y[r];
 
+		// Linear
 		uint32_t hash = k;
-		//MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 		hash = (hash % ht_size);
+
+		/* Murmur
+		uint32_t hash;
+		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
+		hash = (hash % ht_size);*/
 		
 		uint32_t tpl_cntr = hmR[hash].counter.fetch_add(1,std::memory_order_relaxed);
 
@@ -192,15 +197,21 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 
 	start_time = std::chrono::high_resolution_clock::now();
         // Probe S HT
-#pragma omp parallel for
+	auto sum = 0;
+#pragma omp parallel for reduction(+: sum)
         for (unsigned r = *(w_ctx->r_processed);
             r < *(w_ctx->r_processed) + w_ctx->r_batch_size;
             r++){
                 const uint32_t k = w_ctx->R.x[r] + w_ctx->R.y[r];
 
+		// Linear
 		uint32_t hash = k;
-		//MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 		hash = (hash % ht_size);
+
+		/* Murmur
+		uint32_t hash;
+		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
+		hash = (hash % ht_size);*/
 		
 		unsigned emitted_tuples = 0;
 		const uint32_t tpl_cntr = hmS[hash].counter.load(std::memory_order_relaxed);
@@ -222,8 +233,10 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 			}
 		}
 		//w_ctx->stats.processed_output_tuples += emitted_tuples;
-		processed_tuples += emitted_tuples;
+		//processed_tuples += emitted_tuples;
+		sum += emitted_tuples;
         }
+	processed_tuples += sum;
 	end_time = std::chrono::high_resolution_clock::now();
         cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
 
@@ -263,9 +276,14 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
             s++){
                 const uint32_t k = w_ctx->S.a[s] + w_ctx->S.b[s];
 
+		// Linear
 		uint32_t hash = k;
-		//MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 		hash = (hash % ht_size);
+
+		/* Murmur
+		uint32_t hash;
+		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
+		hash = (hash % ht_size);*/
 		
 		uint32_t tpl_cntr = hmS[hash].counter.fetch_add(1,std::memory_order_relaxed);
 
@@ -282,17 +300,22 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 
 	start_time = std::chrono::high_resolution_clock::now();
 
-	//atomic<int> del(0);
         // Probe R HT
-#pragma omp parallel for
+	auto sum = 0;
+#pragma omp parallel for reduction(+: sum)
         for (unsigned s = *(w_ctx->s_processed);
             s < *(w_ctx->s_processed) + w_ctx->s_batch_size;
             s++){
                 const uint32_t k = w_ctx->S.a[s] + w_ctx->S.b[s];
 
+		// Linear
 		uint32_t hash = k;
-		//MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 		hash = (hash % ht_size);
+
+		/* Murmur
+		uint32_t hash;
+		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
+		hash = (hash % ht_size);*/
 		
 		unsigned emitted_tuples = 0;
 		const uint32_t tpl_cntr = hmR[hash].counter.load(std::memory_order_relaxed);
@@ -316,8 +339,10 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 		}
         	//#pragma omp atomic
 		//w_ctx->stats.processed_output_tuples += emitted_tuples;
-		processed_tuples += emitted_tuples;
+		sum += emitted_tuples;
         }
+
+	processed_tuples += sum;
 	end_time = std::chrono::high_resolution_clock::now();
         cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
 	//cout << del << "\n";
