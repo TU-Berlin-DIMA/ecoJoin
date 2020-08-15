@@ -446,7 +446,7 @@ void interprete_r(worker_ctx_t *w_ctx, int *bitmap) {
 
 /* Process batch of tuples on the cpu with nested loop join */
 void process_s_cpu (worker_ctx_t *w_ctx, unsigned threads){
-	//omp_set_num_threads(threads);
+
 #pragma omp parallel for
 	for (unsigned int r = w_ctx->r_first; r < *(w_ctx->r_processed); r++)
 	{
@@ -470,7 +470,7 @@ void process_s_cpu (worker_ctx_t *w_ctx, unsigned threads){
 
 /* Process batch of tuples on the cpu with nested loop join */
 void process_r_cpu (worker_ctx_t *w_ctx, unsigned threads){
-	//omp_set_num_threads(threads);
+
 #pragma omp parallel for
 	for (unsigned int s = w_ctx->s_first; s < *(w_ctx->s_processed); s++)
         {
@@ -517,6 +517,9 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 	
 	//int sec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - w_ctx->stats.start_time ).count();
 	//w_ctx->stats.output_tuple_map[sec]++;
+
+	// Write into resultfile
+	fprintf (w_ctx->resultfile, "%d %d\n", r,s);
 }
 
 void

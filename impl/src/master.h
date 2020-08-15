@@ -109,7 +109,6 @@ struct master_ctx_t {
 		std::chrono::nanoseconds *t_ns;
 		x_t             *x;
 		y_t             *y;
-		z_t             *z;
 	} R;
 
 	/**
@@ -119,8 +118,6 @@ struct master_ctx_t {
 		std::chrono::nanoseconds *t_ns;
 		a_t             *a;
 		b_t             *b;
-		c_t             *c;
-		d_t             *d;
 	} S;
 
     /**

@@ -45,26 +45,21 @@ generate_data (master_ctx_t *ctx)
 		    || ctx->processing_mode == ht_cpu2_mode
 		    || ctx->processing_mode == ht_cpu3_mode
 		    || ctx->processing_mode == ht_cpu4_mode){
-	    /* FIXME: Consider NUMA here */
 	    ctx->R.t_ns = (std::chrono::nanoseconds*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.t_ns));
 	    ctx->R.x = (x_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.x));
 	    ctx->R.y = (y_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.y));
-	    ctx->R.z = (z_t*)malloc((ctx->num_tuples_R + 1) * sizeof (*ctx->R.z));
 
-	    if (! (ctx->R.x && ctx->R.y && ctx->R.z))
+	    if (! (ctx->R.x && ctx->R.y ))
 	    {
 		fprintf (stderr, "memory allocation error\n");
 		exit (EXIT_FAILURE);
 	    }
 
-	    /* FIXME: Consider NUMA here */
 	    ctx->S.t_ns = (std::chrono::nanoseconds*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.t_ns));
 	    ctx->S.a = (a_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.a));
 	    ctx->S.b = (b_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.b));
-	    ctx->S.c = (c_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.c));
-	    ctx->S.d = (d_t*)malloc((ctx->num_tuples_S + 1) * sizeof (*ctx->S.d));
 
-	    if (! (ctx->S.a && ctx->S.b && ctx->S.c && ctx->S.d))
+	    if (! (ctx->S.a && ctx->S.b ))
 	    {
 		fprintf (stderr, "memory allocation error\n");
 		exit (EXIT_FAILURE);
@@ -75,9 +70,8 @@ generate_data (master_ctx_t *ctx)
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.t_ns), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.t_ns),0));
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.x), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.x),0));
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.y), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.y),0));
-	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.z), (ctx->num_tuples_R + 1) * sizeof (*ctx->R.z),0));
 
-	    if (! (ctx->R.x && ctx->R.y && ctx->R.z))
+	    if (! (ctx->R.x && ctx->R.y ))
 	    {
 		fprintf (stderr, "memory allocation error\n");
 		exit (EXIT_FAILURE);
@@ -86,10 +80,8 @@ generate_data (master_ctx_t *ctx)
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.t_ns), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.t_ns),0));
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.a), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.a),0));
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.b), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.b),0));
-	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.c), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.c),0));
-	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->S.d), (ctx->num_tuples_S + 1) * sizeof (*ctx->S.d),0));
 
-	    if (! (ctx->S.a && ctx->S.b && ctx->S.c && ctx->S.d))
+	    if (! (ctx->S.a && ctx->S.b ))
 	    {
 		fprintf (stderr, "memory allocation error\n");
 		exit (EXIT_FAILURE);
@@ -113,7 +105,6 @@ generate_data (master_ctx_t *ctx)
 
         ctx->R.x[i] = random () % ctx->int_value_range;
         ctx->R.y[i] = (float) (random () % ctx->float_value_range);
-        snprintf (ctx->R.z[i], sizeof (z_t), "%u", i);
     }
 
     /* generate data for S */
@@ -129,8 +120,6 @@ generate_data (master_ctx_t *ctx)
 
         ctx->S.a[i] = random () % ctx->int_value_range;
         ctx->S.b[i] = (float) (random () % ctx->float_value_range);
-        ctx->S.c[i] = (double) 2 * i;
-        ctx->S.d[i] = i % 2 == 0;
     }
 
    
