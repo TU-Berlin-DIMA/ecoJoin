@@ -2,10 +2,16 @@ HASH     = 0
 
 TARGET   = gpu_stream
 
-CUFLAGS  = -std=c++11 -gencode arch=compute_53,code=sm_53 -g -Xcompiler=-fopenmp
-CFLAGS   = -std=c++11 -I. -g -I/usr/local/cuda/include -L/usr/local/cuda/lib64
+# Debug
+#CUFLAGS  = -std=c++11 -gencode arch=compute_53,code=sm_53 -g -Xcompiler=-fopenmp -Xcompiler=-fno-omit-frame-pointer --profile
+#CFLAGS   = -std=c++11 -I. -g -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -fno-omit-frame-pointer
+#LFLAGS   =  -gencode arch=compute_53,code=sm_53 -g -lcpufreq -lgomp -ltbb -Xcompiler=-fno-omit-frame-pointer --profile
 
-LFLAGS   =  -gencode arch=compute_53,code=sm_53 -g -lcpufreq -lgomp -ltbb
+# Build
+CUFLAGS  = -std=c++11 -gencode arch=compute_53,code=sm_53 -Xcompiler=-fopenmp -O3
+CFLAGS   = -std=c++11 -I. -g -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -fopenmp -O3
+LFLAGS   = -gencode arch=compute_53,code=sm_53 -lcpufreq -lgomp -ltbb
+
 
 NVCC     = /usr/local/cuda/bin/nvcc
 CC       = g++
