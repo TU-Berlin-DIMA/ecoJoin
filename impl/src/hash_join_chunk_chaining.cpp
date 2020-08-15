@@ -22,7 +22,7 @@ static const int cacheline_size = 64;
 static const int tpl_per_chunk  = uint64_t_size;
 
 // Parameters
-static const int ht_size = 80000;
+static const int ht_size = 40000;
 static const int cleanup_threshold = 20;
 
 // do not change
@@ -158,13 +158,14 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
         }*/
 	
 	// Print into resultfile
-	//fprintf (w_ctx->resultfile, "%d %d\n", r,s);
+	fprintf (w_ctx->resultfile, "%d %d\n", r,s);
 }
 
 
 
 void process_r_ht_cpu(worker_ctx_t *w_ctx){
 
+	auto start_time = std::chrono::high_resolution_clock::now();
         // Build R HT
 #pragma omp parallel for
         for (unsigned r = *(w_ctx->r_processed);
@@ -172,8 +173,8 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
             r++){
                 const uint32_t k = w_ctx->R.x[r] + w_ctx->R.y[r];
 
-		uint32_t hash;
-		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
+		uint32_t hash = k;
+		//MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 		hash = (hash % ht_size);
 		
 		uint32_t tpl_cntr = hmR[hash].counter.fetch_add(1,std::memory_order_relaxed);
@@ -186,7 +187,10 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 		((uint64_t*) hmR[hash].address)[tpl_cntr*2] = k; // key
 		((uint64_t*) hmR[hash].address)[(tpl_cntr*2)+1] = r; // value
         }
+	auto end_time = std::chrono::high_resolution_clock::now();
+        cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
 
+	start_time = std::chrono::high_resolution_clock::now();
         // Probe S HT
 #pragma omp parallel for
         for (unsigned r = *(w_ctx->r_processed);
@@ -194,8 +198,8 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
             r++){
                 const uint32_t k = w_ctx->R.x[r] + w_ctx->R.y[r];
 
-		uint32_t hash;
-		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
+		uint32_t hash = k;
+		//MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 		hash = (hash % ht_size);
 		
 		unsigned emitted_tuples = 0;
@@ -206,19 +210,22 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 				if (cur_chunk[j*2] == k) { // match
 					const uint32_t s = cur_chunk[(j*2)+1];
 					//cout << "S: " << s << " " << k << "\n";
-					if ((w_ctx->S.t_ns[s].count() + w_ctx->window_size_S * n_sec)
+					/*if ((w_ctx->S.t_ns[s].count() + w_ctx->window_size_S * n_sec)
 						> w_ctx->R.t_ns[r].count()) { // Valid
 						mt_atomic_chunk::emit_result(w_ctx, r, s);
 						emitted_tuples++;
-					} /*else { // Unvalid
+					}*/ /*else { // Unvalid
 						cleanupS[s] |= 1UL << j;
 					}*/
+					emitted_tuples++;
 				}
 			}
 		}
 		//w_ctx->stats.processed_output_tuples += emitted_tuples;
 		processed_tuples += emitted_tuples;
         }
+	end_time = std::chrono::high_resolution_clock::now();
+        cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
 
         *(w_ctx->r_processed) += w_ctx->r_batch_size;
 
@@ -248,6 +255,7 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 
 void process_s_ht_cpu(worker_ctx_t *w_ctx){
 
+	auto start_time = std::chrono::high_resolution_clock::now();
 	// Build S HT
 #pragma omp parallel for 
 	for (unsigned s = *(w_ctx->s_processed);
@@ -255,8 +263,8 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
             s++){
                 const uint32_t k = w_ctx->S.a[s] + w_ctx->S.b[s];
 
-		uint32_t hash;
-		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
+		uint32_t hash = k;
+		//MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 		hash = (hash % ht_size);
 		
 		uint32_t tpl_cntr = hmS[hash].counter.fetch_add(1,std::memory_order_relaxed);
@@ -269,6 +277,10 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 		((uint64_t*) hmS[hash].address)[tpl_cntr*2] = k; // key
 		((uint64_t*) hmS[hash].address)[(tpl_cntr*2)+1] = s; // value
         }
+	auto end_time = std::chrono::high_resolution_clock::now();
+        cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
+
+	start_time = std::chrono::high_resolution_clock::now();
 
 	//atomic<int> del(0);
         // Probe R HT
@@ -278,8 +290,8 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
             s++){
                 const uint32_t k = w_ctx->S.a[s] + w_ctx->S.b[s];
 
-		uint32_t hash;
-		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
+		uint32_t hash = k;
+		//MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
 		hash = (hash % ht_size);
 		
 		unsigned emitted_tuples = 0;
@@ -290,14 +302,15 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 				if (cur_chunk[j*2] == k) { // match
 					const uint32_t r = cur_chunk[(j*2)+1];
 					//cout << "R: " << r << " " << k << "\n";
-					if ((w_ctx->R.t_ns[r].count() + w_ctx->window_size_R * n_sec)
+					/*if ((w_ctx->R.t_ns[r].count() + w_ctx->window_size_R * n_sec)
 						> w_ctx->S.t_ns[s].count()) {
 						mt_atomic_chunk::emit_result(w_ctx, r, s);
 						emitted_tuples++;
-					} /*else { // Unvalid
+					} *//*else { // Unvalid
 						del++;
 						//cleanupR[r] |= 1UL << j;
 					}*/
+						emitted_tuples++;
 				}
 			}
 		}
@@ -305,6 +318,8 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 		//w_ctx->stats.processed_output_tuples += emitted_tuples;
 		processed_tuples += emitted_tuples;
         }
+	end_time = std::chrono::high_resolution_clock::now();
+        cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
 	//cout << del << "\n";
 
 	/*std::bitset<bitwidth> bs(clearupR[r]);
