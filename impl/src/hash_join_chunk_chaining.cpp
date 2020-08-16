@@ -23,8 +23,8 @@ static const int tpl_per_chunk  = uint64_t_size;
 
 // Parameters
 static const int ht_size = 75000;
-static const int cleanup_threshold = 20;
-static const int output_buffersize = 60000 * sizeof(uint32_t) * 2;
+static const int cleanup_threshold = 0.1;
+static const int output_buffersize = 300000 * sizeof(uint32_t) * 2;
 
 // do not change
 static const int max_try = ht_size;
@@ -212,8 +212,9 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 
 	start_time = std::chrono::high_resolution_clock::now();
         // Probe S HT
-	auto sum = 0;
-#pragma omp parallel for reduction(+: sum)
+	auto emitted_sum = 0;
+        auto to_delete_sum = 0;
+#pragma omp parallel for reduction(+: emitted_sum, to_delete_sum)
         for (unsigned r = *(w_ctx->r_processed);
             r < *(w_ctx->r_processed) + w_ctx->r_batch_size;
             r++){
@@ -229,6 +230,7 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 		hash = (hash % ht_size);*/
 		
 		unsigned emitted_tuples = 0;
+		unsigned to_delete_tuples = 0;
 		vector<tuple<uint32_t, uint32_t>> out_tuples;
 		const uint32_t tpl_cntr = hmS[hash].counter.load(std::memory_order_relaxed);
 		if (tpl_cntr != 0){ // Not empty
@@ -241,10 +243,11 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 						> w_ctx->R.t_ns[r].count()) { // Valid
 						out_tuples.push_back(tuple<uint32_t, uint32_t>(r,s));
 						emitted_tuples++;
-					} /*else { // Unvalid
-						cleanupS[s] |= 1UL << j;
-					}*/
-					//emitted_tuples++;
+					} else { // Unvalid
+						cout << (w_ctx->S.t_ns[s].count() + w_ctx->window_size_S * n_sec) << "\n";
+						cout <<  w_ctx->R.t_ns[r].count()  << "\n";
+						to_delete_tuples++;
+					}
 				}
 			}
 		}
@@ -252,14 +255,16 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 		// Write output tuples
 		int j = 0;
 		for (auto i : out_tuples) {
-			output[(processed_tuples+sum+j)*2]   = get<0>(i);
-			output[(processed_tuples+sum+j)*2+1] = get<1>(i);
+			output[(processed_tuples+emitted_sum+j)*2]   = get<0>(i);
+			output[(processed_tuples+emitted_sum+j)*2+1] = get<1>(i);
 			j++;
 		}
-		sum += emitted_tuples;
+		
+		to_delete_sum += to_delete_tuples;
+                emitted_sum += emitted_tuples;
         }
 
-	processed_tuples += sum;
+	processed_tuples += emitted_sum;
 	
 	end_time = std::chrono::high_resolution_clock::now();
         cout << "Probe S "
@@ -270,24 +275,26 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 	start_time = std::chrono::high_resolution_clock::now();
 
 	/* Clean-up S HT */
+	if ((float)to_delete_sum/(ht_size*tpl_per_chunk) > cleanup_threshold) {
 #pragma omp parallel for
-	for (size_t i = 0; i < ht_size; i++){
-		uint32_t tpl_cnt = hmS[i].counter.load(std::memory_order_relaxed);
-		uint64_t *chunk = (uint64_t*) hmS[i].address; // head
-		for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
-			const size_t s = chunk[(j*2)+1];
-			if ((w_ctx->S.t_ns[s].count() + w_ctx->window_size_S * n_sec) 
-				< w_ctx->R.t_ns[*(w_ctx->r_processed)].count()) {
-				// Remove + Move
-				for (int u = 0, l = 0; u < tpl_cnt; u++) {
-					if ((u != j || u != j+1) && u != l) {
-						chunk[l*2] = chunk[u*2];
-						chunk[l*2+1] = chunk[u*2+1];
-						l++;
+		for (size_t i = 0; i < ht_size; i++){
+			uint32_t tpl_cnt = hmS[i].counter.load(std::memory_order_relaxed);
+			uint64_t *chunk = (uint64_t*) hmS[i].address; // head
+			for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
+				const size_t s = chunk[(j*2)+1];
+				if ((w_ctx->S.t_ns[s].count() + w_ctx->window_size_S * n_sec) 
+					< w_ctx->R.t_ns[*(w_ctx->r_processed)].count()) {
+					// Remove + Move
+					for (int u = 0, l = 0; u < tpl_cnt; u++) {
+						if ((u != j || u != j+1) && u != l) {
+							chunk[l*2] = chunk[u*2];
+							chunk[l*2+1] = chunk[u*2+1];
+							l++;
+						}
 					}
+					tpl_cnt--;
+					hmS[i].counter--; // Update tpl counter
 				}
-				tpl_cnt--;
-				hmS[i].counter--; // Update tpl counter
 			}
 		}
 	}
@@ -333,8 +340,9 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 	start_time = std::chrono::high_resolution_clock::now();
 
         // Probe R HT
-	auto sum = 0;
-#pragma omp parallel for reduction(+: sum)
+	auto emitted_sum = 0;
+	auto to_delete_sum = 0;
+#pragma omp parallel for reduction(+: emitted_sum, to_delete_sum)
         for (unsigned s = *(w_ctx->s_processed);
             s < *(w_ctx->s_processed) + w_ctx->s_batch_size;
             s++){
@@ -350,6 +358,7 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 		hash = (hash % ht_size);*/
 		
 		unsigned emitted_tuples = 0;
+		unsigned to_delete_tuples = 0;
 		vector<tuple<uint32_t, uint32_t>> out_tuples;
 		const uint32_t tpl_cntr = hmR[hash].counter.load(std::memory_order_relaxed);
 		if (tpl_cntr != 0) { // Not empty
@@ -362,10 +371,9 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 						> w_ctx->S.t_ns[s].count()) {
 						out_tuples.push_back(tuple<uint32_t, uint32_t>(r,s));
 						emitted_tuples++;
-					} /*else { // Unvalid
-						del++;
-						//cleanupR[r] |= 1UL << j;
-					}*/
+					} else { // Unvalid
+						to_delete_tuples++;
+					}
 				}
 			}
 		}
@@ -373,49 +381,46 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 		// Write output tuples
 		int j = 0;
 		for (auto i : out_tuples) {
-			output[(processed_tuples+sum+j)*2]   = get<0>(i);
-			output[(processed_tuples+sum+j)*2+1] = get<1>(i);
+			output[(processed_tuples+emitted_sum+j)*2]   = get<0>(i);
+			output[(processed_tuples+emitted_sum+j)*2+1] = get<1>(i);
 			j++;
 		}
 		
-		sum += emitted_tuples;
+		to_delete_sum += to_delete_tuples;
+		emitted_sum += emitted_tuples;
         }
 
-	processed_tuples += sum;
+	processed_tuples += emitted_sum;
 
 	end_time = std::chrono::high_resolution_clock::now();
         cout << "Probe R " << 
 		std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
-	//cout << del << "\n";
-
-	/*std::bitset<bitwidth> bs(clearupR[r]);
-	if (bs.count() > cleanup_threshold) {
-	
-	}*/
 
         *(w_ctx->s_processed) += w_ctx->s_batch_size;
 
 	start_time = std::chrono::high_resolution_clock::now();
 
-	// Clean-up R HT
+	/* Clean-up R HT */
+	if ((float)to_delete_sum/(ht_size*tpl_per_chunk) > cleanup_threshold) {
 #pragma omp parallel for
-	for (size_t i = 0; i < ht_size; i++){
-		uint32_t tpl_cnt = hmR[i].counter.load(std::memory_order_relaxed);
-		uint64_t *chunk = (uint64_t*) hmR[i].address; // head
-		for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
-			const size_t r = chunk[(j*2)+1];
-			if ((w_ctx->R.t_ns[r].count() + w_ctx->window_size_R * n_sec) 
-				< w_ctx->S.t_ns[*(w_ctx->s_processed)].count()) {
-				// Remove + Move
-				for (int u = 0, l = 0; u < tpl_cnt; u++) {
-					if ((u != j || u != j+1) && u != l) {
-						chunk[l*2] = chunk[u*2];
-						chunk[l*2+1] = chunk[u*2+1];
-						l++;
+		for (size_t i = 0; i < ht_size; i++){
+			uint32_t tpl_cnt = hmR[i].counter.load(std::memory_order_relaxed);
+			uint64_t *chunk = (uint64_t*) hmR[i].address; // head
+			for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
+				const size_t r = chunk[(j*2)+1];
+				if ((w_ctx->R.t_ns[r].count() + w_ctx->window_size_R * n_sec) 
+					< w_ctx->S.t_ns[*(w_ctx->s_processed)].count()) {
+					// Remove + Move
+					for (int u = 0, l = 0; u < tpl_cnt; u++) {
+						if ((u != j || u != j+1) && u != l) {
+							chunk[l*2] = chunk[u*2];
+							chunk[l*2+1] = chunk[u*2+1];
+							l++;
+						}
 					}
+					tpl_cnt--;
+					hmR[i].counter--; // Update tpl counter
 				}
-				tpl_cnt--;
-				hmR[i].counter--; // Update tpl counter
 			}
 		}
 	}
