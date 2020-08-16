@@ -198,7 +198,7 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 		
 		uint32_t tpl_cntr = hmR[hash].counter.fetch_add(1,std::memory_order_relaxed);
 
-		if (tpl_cntr == tpl_per_chunk) {
+		if (tpl_cntr >= tpl_per_chunk) {
 			cout << "Chunk full\n";
 			exit(1);
 		}
@@ -318,7 +318,7 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 		
 		uint32_t tpl_cntr = hmS[hash].counter.fetch_add(1,std::memory_order_relaxed);
 
-		if (tpl_cntr == tpl_per_chunk) {
+		if (tpl_cntr >= tpl_per_chunk) {
 			cout << "Chunk full\n";
 			exit(1);
 		}
