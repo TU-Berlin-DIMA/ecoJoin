@@ -10,6 +10,8 @@
 #include "statistics.h"
 #include "master.h"
 
+const float ns = 0.000000001;
+
 //const std::string cpu_usage_call = "{ cat /proc/stat; sleep 1; cat /proc/stat; } |     awk '/^cpu / {usr=$2-usr; sys=$4-sys; idle=$5-idle; iow=$6-iow}  END {total=usr+sys+idle+iow; printf \"%.2f\n\", (total-idle)*100/total}'";
 const std::string cpu_usage_call = "/home/adi/efficient-gpu-joins/impl/benchmark/helper/cpu_usage.sh";
 
@@ -17,6 +19,11 @@ void print_statistics (statistics *stats, FILE *outfile, FILE *resultfile, maste
  	fprintf (outfile, "# Output Tuples       : %u\n", stats->processed_output_tuples);
         fprintf (outfile, "# Throughput (tuple/s): %f\n", 
 			stats->processed_output_tuples/((float)ctx->num_tuples_R/(float)ctx->rate_R));
+        fprintf (outfile, "# Throughput only Proc (tuple/s): %f\n", 
+			stats->processed_output_tuples/((float)stats->runtime_proc*ns));
+        fprintf (outfile, "# Throughput only Proc (16 Byte tuples)(MB/s): %f\n", 
+			((float)stats->processed_input_tuples*16/1048576/*MB*/)
+			/((float)stats->runtime_proc*ns));
         fprintf (outfile, "# Average Latency (ns): %f\n", 
 			(float)stats->summed_latency.count()/(float)stats->processed_output_tuples);
         fprintf (outfile, "# Runtime      (ns): %ld\n", stats->runtime);

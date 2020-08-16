@@ -22,7 +22,7 @@ static const int cacheline_size = 64;
 static const int tpl_per_chunk  = uint64_t_size;
 
 // Parameters
-static const int ht_size = 40000;
+static const int ht_size = 75000;
 static const int cleanup_threshold = 20;
 
 // do not change
@@ -43,6 +43,10 @@ uint64_t *cleanupR;
 uint64_t *cleanupS;
 
 void init_ht(){
+	cout << "# Use a hash table size of " << ht_size << " chunks with " << tpl_per_chunk << " tuples\n";
+	cout << "# Total hash table size is " << ht_size * tpl_per_chunk * 8 /*byte*/ 
+		/ 1048576 /*MB*/ << " MB\n";
+
         posix_memalign((void**)&hmR, 64, ht_size*sizeof(ht));
         posix_memalign((void**)&hmS, 64, ht_size*sizeof(ht));
 
@@ -173,7 +177,7 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
             r++){
                 const uint32_t k = w_ctx->R.x[r] + w_ctx->R.y[r];
 
-		// Linear
+		/* Linear */
 		uint32_t hash = k;
 		hash = (hash % ht_size);
 
@@ -204,7 +208,7 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
             r++){
                 const uint32_t k = w_ctx->R.x[r] + w_ctx->R.y[r];
 
-		// Linear
+		/* Linear*/
 		uint32_t hash = k;
 		hash = (hash % ht_size);
 
@@ -276,7 +280,7 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
             s++){
                 const uint32_t k = w_ctx->S.a[s] + w_ctx->S.b[s];
 
-		// Linear
+		/* Linear*/
 		uint32_t hash = k;
 		hash = (hash % ht_size);
 
@@ -308,7 +312,7 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
             s++){
                 const uint32_t k = w_ctx->S.a[s] + w_ctx->S.b[s];
 
-		// Linear
+		/* Linear*/
 		uint32_t hash = k;
 		hash = (hash % ht_size);
 
