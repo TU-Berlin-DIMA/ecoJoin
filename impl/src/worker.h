@@ -40,8 +40,8 @@ struct worker_ctx_t {
     unsigned *s_processed;
 
     /* keeps track of time spent idle or processing */ 
-    std::chrono::time_point<std::chrono::system_clock> proc_start_time;
-    std::chrono::time_point<std::chrono::system_clock> idle_start_time;
+    std::chrono::time_point<std::chrono::steady_clock> proc_start_time;
+    std::chrono::time_point<std::chrono::steady_clock> idle_start_time;
     
     /* vars to lock x_available */
     // See: https://en.cppreference.com/w/cpp/thread/condition_variable
@@ -139,7 +139,8 @@ struct worker_ctx_t {
 
 
 
-void *start_worker(void *ctx);
+void start_batch(master_ctx_t *ctx, worker_ctx_t *w_ctx);
+void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx);
 void end_processing(worker_ctx_t *w_ctx);
 void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s);
 #endif  /* WORKER_H */

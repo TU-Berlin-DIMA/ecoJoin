@@ -22,7 +22,7 @@ static const int cacheline_size = 64;
 static const int tpl_per_chunk  = uint64_t_size;
 
 // Parameters
-static const int ht_size = 75000;
+static const int ht_size = 10000;
 static const int cleanup_threshold = 0.1;
 static const int output_buffersize = 300000 * sizeof(uint32_t) * 2;
 
@@ -179,7 +179,9 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 
 void process_r_ht_cpu(worker_ctx_t *w_ctx){
 
-	auto start_time = std::chrono::high_resolution_clock::now();
+	Timer::Timer timer = Timer::Timer();
+	auto start_time = timer.now();
+
         // Build R HT
 #pragma omp parallel for 
         for (unsigned r = *(w_ctx->r_processed);
@@ -206,11 +208,16 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 		((uint64_t*) hmR[hash].address)[tpl_cntr*2] = k; // key
 		((uint64_t*) hmR[hash].address)[(tpl_cntr*2)+1] = r; // value
         }
-	auto end_time = std::chrono::high_resolution_clock::now();
+
+	auto end_time = timer.now();
+	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+
+#ifdef DEBUG
         cout << "Build R " <<
 		std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
+#endif
+	start_time = timer.now();
 
-	start_time = std::chrono::high_resolution_clock::now();
         // Probe S HT
 	auto emitted_sum = 0;
         auto to_delete_sum = 0;
@@ -244,8 +251,6 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 						out_tuples.push_back(tuple<uint32_t, uint32_t>(r,s));
 						emitted_tuples++;
 					} else { // Unvalid
-						cout << (w_ctx->S.t_ns[s].count() + w_ctx->window_size_S * n_sec) << "\n";
-						cout <<  w_ctx->R.t_ns[r].count()  << "\n";
 						to_delete_tuples++;
 					}
 				}
@@ -266,13 +271,16 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 
 	processed_tuples += emitted_sum;
 	
-	end_time = std::chrono::high_resolution_clock::now();
-        cout << "Probe S "
-		<< std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
-
         *(w_ctx->r_processed) += w_ctx->r_batch_size;
 
-	start_time = std::chrono::high_resolution_clock::now();
+	end_time = timer.now();
+	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+
+#ifdef DEBUG
+        cout << "Probe S "
+		<< std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
+#endif
+	start_time = timer.now();
 
 	/* Clean-up S HT */
 	if ((float)to_delete_sum/(ht_size*tpl_per_chunk) > cleanup_threshold) {
@@ -299,14 +307,19 @@ void process_r_ht_cpu(worker_ctx_t *w_ctx){
 		}
 	}
 
-	end_time = std::chrono::high_resolution_clock::now();
+	end_time = timer.now();
+	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+#ifdef DEBUG
         cout << "Clean up S " << 
 		std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
+#endif
 }
 
 void process_s_ht_cpu(worker_ctx_t *w_ctx){
 
-	auto start_time = std::chrono::high_resolution_clock::now();
+	Timer::Timer timer = Timer::Timer();
+	auto start_time = timer.now();
+
 	// Build S HT
 #pragma omp parallel for 
 	for (unsigned s = *(w_ctx->s_processed);
@@ -333,11 +346,16 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 		((uint64_t*) hmS[hash].address)[tpl_cntr*2] = k; // key
 		((uint64_t*) hmS[hash].address)[(tpl_cntr*2)+1] = s; // value
         }
-	auto end_time = std::chrono::high_resolution_clock::now();
+
+	auto end_time = timer.now();
+
+#ifdef DEBUG
         cout << "Build S "
 		<< std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
+#endif
+	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
 
-	start_time = std::chrono::high_resolution_clock::now();
+	start_time = timer.now();
 
         // Probe R HT
 	auto emitted_sum = 0;
@@ -392,13 +410,16 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 
 	processed_tuples += emitted_sum;
 
-	end_time = std::chrono::high_resolution_clock::now();
+	end_time = timer.now();
+#ifdef DEBUG
         cout << "Probe R " << 
 		std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
+#endif
+	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
 
         *(w_ctx->s_processed) += w_ctx->s_batch_size;
 
-	start_time = std::chrono::high_resolution_clock::now();
+	start_time = timer.now();
 
 	/* Clean-up R HT */
 	if ((float)to_delete_sum/(ht_size*tpl_per_chunk) > cleanup_threshold) {
@@ -425,8 +446,11 @@ void process_s_ht_cpu(worker_ctx_t *w_ctx){
 		}
 	}
 	
-	end_time = std::chrono::high_resolution_clock::now();
+	end_time = timer.now();
+#ifdef DEBUG
         cout << "Clean up R " << 
 		std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
+#endif
+	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
 }
 }

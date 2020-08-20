@@ -23,11 +23,6 @@
 #include "hash_join_atomic.h"
 #include "hash_join_chunk_chaining.h"
 
-
-/* ----- forward declarations ----- */
-static void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx);
-static void start_batch(master_ctx_t *ctx, worker_ctx_t *w_ctx);
-
 /**
  * Print usage information
  */
@@ -82,8 +77,8 @@ int main(int argc, char **argv) {
 	ctx->s_processed = 0;
 	ctx->max_cpu_freq = 14;
 	ctx->min_cpu_freq = 1;
-	ctx->r_batch_size = 2048;//64;
-	ctx->s_batch_size = 2048;//64;
+	ctx->r_batch_size = 2000;
+	ctx->s_batch_size = 2000;
 	ctx->time_sleep = false;
         ctx->time_sleep_control_in_worker = true;
         ctx->gpu_gridsize = 1;
@@ -235,6 +230,8 @@ int main(int argc, char **argv) {
 			ctx->rate_R, ctx->rate_S);
 	fprintf (ctx->outfile, "#   - window_size_R: %u; window_size_S: %u\n",
 			ctx->window_size_R, ctx->window_size_S);
+	fprintf (ctx->outfile, "#   - r_batch_size: %u; s_batch_size: %u\n",
+			ctx->r_batch_size, ctx->s_batch_size);
 	if (ctx->window_size_S == ctx->window_size_R && ctx->num_tuples_R == ctx->num_tuples_S)
 		fprintf (ctx->outfile, "# Stream will run for %f minutes\n",(float)ctx->num_tuples_R/(float)ctx->rate_R/60);
 	generate_data (ctx);
@@ -316,140 +313,15 @@ int main(int argc, char **argv) {
 	else
 		fprintf (ctx->outfile, "# Do not use range predicate\n\n");
 
-	if (!ctx->batch_mode) {
-		fprintf (ctx->outfile, "# Start Stream\n");
-		std::thread first (start_stream, ctx, w_ctx);
-		
-		fprintf (ctx->outfile, "# Start Worker\n");
-		start_worker(w_ctx);
-
-		first.join();
-	} else {
+	if (ctx->batch_mode) {
 		fprintf (ctx->outfile, "# Process in one batch\n");
-		std::thread first (start_batch, ctx, w_ctx);
+		start_batch(ctx, w_ctx);
 
-		fprintf (ctx->outfile, "# Start Worker\n");
-		start_worker(w_ctx);
-		
-		first.join();
+	} else {
+		fprintf (ctx->outfile, "# Start stream\n");
+		start_stream(ctx, w_ctx);
 	}
 
 	return EXIT_SUCCESS;
 }
 
-/**
- * Process in batches instead of in streams (start_stream)
- */
-static void start_batch (master_ctx_t *ctx, worker_ctx_t *w_ctx){
-
-	/* Compute full batch */
-	w_ctx->r_available = &(ctx->num_tuples_R);
-	w_ctx->s_available = &(ctx->num_tuples_S);
-	w_ctx->r_batch_size = ctx->num_tuples_R;
-	w_ctx->s_batch_size = ctx->num_tuples_S;
-	ctx->data_cv.notify_one();
-
-	std::this_thread::sleep_for(std::chrono::seconds(25));
-	
-	end_processing(w_ctx);
-
-	/* Statistics */
-	std::cout << "# Write Statistics \n";
-	w_ctx->stats.end_time = std::chrono::high_resolution_clock::now();
-       	w_ctx->stats.runtime = std::chrono::duration_cast
-                        <std::chrono::nanoseconds>(w_ctx->stats.end_time - w_ctx->stats.start_time).count();;
-
-	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->logfile, ctx);
-	//write_histogram_stats(&(w_ctx->stats), "output_tuple_stats.csv");
-	//mt_atomic_chunk::print_ht(w_ctx);
-
-	fprintf (ctx->outfile, "# Exit\n");
-	exit(0);
-
-}
-
-/**
- * Handles the stream queues
- */
-static void start_stream (master_ctx_t *ctx, worker_ctx_t *w_ctx)
-{
-	/* is the next tuple from the R stream */
-	bool next_is_R;
-
-	w_ctx->stats.start_time = std::chrono::high_resolution_clock::now();
-	
-	/* time used for Process / Idle window control */
-        time_t start = time(0);
-
-	/* size of tuple batch to release to the worker */
-	const int master_batch_size = 1;
-	const int next = master_batch_size + 1;
-
-	while (ctx->r_available < ctx->num_tuples_R || ctx->s_available < ctx->num_tuples_S) {
-
-		/* is the next tuple an R or an S tuple? */
-		if (ctx->r_available >= ctx->num_tuples_R){
-			next_is_R = false; // R Stream ended
-		} else if (ctx->s_available >= ctx->num_tuples_S) {
-			next_is_R = true;  // S Stream ended
-		} else {
-			next_is_R = (ctx->R.t_ns[ctx->r_available+next] < ctx->S.t_ns[ctx->s_available+next]);
-		}
-
-		/* sleep until we have to send the next tuple */
-		if (next_is_R)
-			std::this_thread::sleep_for(w_ctx->stats.start_time 
-					+ ctx->R.t_ns[ctx->r_available+next] - std::chrono::high_resolution_clock::now());
-		else
-			std::this_thread::sleep_for(w_ctx->stats.start_time 
-					+ ctx->S.t_ns[ctx->s_available+next] - std::chrono::high_resolution_clock::now());
-
-		/* Update available tuple */
-		if (next_is_R){
-			ctx->r_available += master_batch_size;
-
-			/*
-			 * TODO.
-			 * Batchsize kleiner Throughput ist nicht möglich
-			 *  TUPLES_PER_CHUNK_R <= Throughput
-			 */ 
-			/* Notify condition */
-			if (ctx->r_available >= ctx->r_processed + ctx->r_batch_size){
-				ctx->data_cv.notify_one();
-			}
-		} else {
-			ctx->s_available += master_batch_size;
-
-			/* Notify condition */
-			if (ctx->s_available >= ctx->s_processed + ctx->s_batch_size){
-				ctx->data_cv.notify_one();
-			}
-		}
-
-		/* Legacy: proc idle control was in master instead of worker 
-		if (ctx->time_sleep && !ctx->time_sleep_control_in_worker) {
-			// Check if we are still in the process time window 
-			if (difftime( time(0), start) == ctx->process_window_time){
-				// Start idle time window 
-				usleep(ctx->idle_window_time);
-
-				start = time(0);
-			}
-		}*/
-	}
-	fprintf (ctx->outfile, "# End of Stream\n");
-   
-	end_processing(w_ctx);
-
-	/* Statistics */
-	std::cout << "# Write Statistics \n";
-	w_ctx->stats.end_time = std::chrono::high_resolution_clock::now();
-       	w_ctx->stats.runtime = std::chrono::duration_cast
-                        <std::chrono::nanoseconds>(w_ctx->stats.end_time - w_ctx->stats.start_time).count();;
-
-	print_statistics(&(w_ctx->stats), ctx->outfile, ctx->logfile, ctx);
-	write_histogram_stats(&(w_ctx->stats), "output_tuple_stats.csv");
-	//mt_atomic_chunk::print_ht(w_ctx);
-
-	exit(0);
-}

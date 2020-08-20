@@ -1,15 +1,17 @@
+#ifndef STATISTICA_H
+#define STATISTICS_H
+
 #include "time.h"
 #include "master.h"
 #include <chrono>
 #include <unordered_map>
 
-
 struct statistics {
     /* Timestamp when the stream started without offset*/
-    std::chrono::time_point<std::chrono::system_clock> start_time;
+    std::chrono::time_point<std::chrono::steady_clock> start_time;
 
     /* Timestamp when the processing is stopped */
-    std::chrono::time_point<std::chrono::system_clock> end_time;
+    std::chrono::time_point<std::chrono::steady_clock> end_time;
 
     /* Timestamp when the stream started + offset as timespec*/
     struct timespec start_time_ts;
@@ -48,3 +50,4 @@ void print_statistics(statistics *stats, FILE *outfile, FILE *resultfile,  maste
 void write_histogram_stats(statistics *stats, std::string filename);
 
 double get_current_cpu_usage();
+#endif 
