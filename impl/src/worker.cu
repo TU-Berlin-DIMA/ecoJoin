@@ -91,6 +91,7 @@ void start_batch(master_ctx_t *ctx, worker_ctx_t *w_ctx){
  * worker main loop
  */
 void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
+
 	Timer::Timer timer = Timer::Timer();
 	
 	init_worker(w_ctx);
@@ -108,7 +109,29 @@ void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
         const int next_r = emit_batch_size_r + 1;
         const int next_s = emit_batch_size_s + 1;
 
-        while (ctx->r_available+next_r < ctx->num_tuples_R || ctx->s_available+next_s < ctx->num_tuples_S) { /* Still tuples available */
+	/* Iterations over generated data */
+	size_t iterations_r = 1;
+	size_t iterations_s = 1;
+
+        while ((ctx->r_available + (ctx->generate_tuples_R * (iterations_r-1)) + next_r < ctx->num_tuples_R )
+			&& (ctx->s_available + (ctx->generate_tuples_S * (iterations_s-1)) + next_s < ctx->num_tuples_S) ){ /* Still tuples available */
+
+		/* Update Iterations */
+		if (ctx->r_available+next_r > ctx->generate_tuples_R){
+			std::cout << "Iteration R: " << iterations_r << "\n";
+			std::cout << ctx->r_available + (ctx->generate_tuples_R * (iterations_r-1)) + next_r << "\n";
+			std::cout << ctx->s_available + (ctx->generate_tuples_S * (iterations_s-1)) + next_s << "\n";
+			iterations_r++;
+			ctx->r_available = 0;
+			ctx->r_processed = 0;
+		}
+		if (ctx->s_available+next_s > ctx->generate_tuples_S){
+			std::cout << "Iteration S: " << iterations_s << "\n";
+			iterations_s++;
+			ctx->s_available = 0;
+			ctx->s_processed = 0;
+		}
+
 
 		/* is the next tuple an R or an S tuple? */
                 if (ctx->r_available+next_r >= ctx->num_tuples_R){
@@ -116,26 +139,45 @@ void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
                 } else if (ctx->s_available+next_s >= ctx->num_tuples_S) {
                         next_is_R = true;  // S Stream ended
                 } else {
+			if (iterations_r > 1){
+				auto t = std::chrono::nanoseconds(ctx->R.t_ns[ctx->r_available]);
+				if (ctx->r_available == 0) 
+					t = std::chrono::nanoseconds(ctx->R.t_ns[ctx->generate_tuples_R]);
+				for (int i = ctx->r_available; i < ctx->r_available+next_r; i++) {
+					t = get_current_ns(ctx,t);
+                			ctx->R.t_ns[i] = t;
+				}
+			}
+			if (iterations_s > 1){
+				auto t = std::chrono::nanoseconds(ctx->S.t_ns[ctx->s_available]);
+				if (ctx->s_available == 0) 
+					t = std::chrono::nanoseconds(ctx->S.t_ns[ctx->generate_tuples_S]);
+				for (int i = ctx->s_available; i < ctx->s_available+next_s; i++) {
+					t = get_current_ns(ctx,t);
+                			ctx->S.t_ns[i] = t;
+				}
+			}
                         next_is_R = (ctx->R.t_ns[ctx->r_available+next_r] < ctx->S.t_ns[ctx->s_available+next_s]);
                 }
+ 
 
                 /* sleep until we the next tuple */
                 if (next_is_R) {
-                        while(std::chrono::duration_cast<std::chrono::nanoseconds>(w_ctx->stats.start_time 
-                                        + ctx->R.t_ns[ctx->r_available+next_r] - timer.now()).count() > 0);
-			
-                        //std::this_thread::sleep_for(w_ctx->stats.start_time
-                        //                + ctx->R.t_ns[ctx->r_available+next_r] - timer.now());
-
-                        //std::this_thread::sleep_for(std::chrono::nanoseconds(1));
+			//std::cout << "Sleep time (ms): " <<  std::chrono::duration_cast<std::chrono::milliseconds>(
+			//		w_ctx->stats.start_time + ctx->R.t_ns[ctx->r_available+next_r] - timer.now()).count() << "\n";
+                        //while(std::chrono::duration_cast<std::chrono::nanoseconds>(w_ctx->stats.start_time 
+                        //                + ctx->R.t_ns[ctx->r_available+next_r] - timer.now()).count() > 0);
+		
+                        std::this_thread::sleep_for(w_ctx->stats.start_time
+                                        + ctx->R.t_ns[ctx->r_available+next_r] - timer.now());
 		} else {
-                        while(std::chrono::duration_cast<std::chrono::nanoseconds>(w_ctx->stats.start_time 
-                                        + ctx->S.t_ns[ctx->s_available+next_s] - timer.now()).count() > 0);
+			//std::cout << "Sleep time (ms): " <<  std::chrono::duration_cast<std::chrono::milliseconds>(
+			//		w_ctx->stats.start_time + ctx->S.t_ns[ctx->s_available+next_s] - timer.now()).count() << "\n";
+                        //while(std::chrono::duration_cast<std::chrono::nanoseconds>(w_ctx->stats.start_time 
+                        //                + ctx->S.t_ns[ctx->s_available+next_s] - timer.now()).count() > 0);
 
-                        //std::this_thread::sleep_for(w_ctx->stats.start_time
-                        //                + ctx->S.t_ns[ctx->s_available+next_s] - timer.now());
-
-                        //std::this_thread::sleep_for(std::chrono::nanoseconds(1));
+                        std::this_thread::sleep_for(w_ctx->stats.start_time
+                                       + ctx->S.t_ns[ctx->s_available+next_s] - timer.now());
 		}
 
                 if (next_is_R){

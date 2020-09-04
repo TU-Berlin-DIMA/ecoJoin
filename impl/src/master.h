@@ -78,6 +78,10 @@ struct master_ctx_t {
     	unsigned idle_window_time;
     	unsigned process_window_time;
 
+	/* number of generated tuples */
+	long unsigned generate_tuples_S;
+	long unsigned generate_tuples_R;
+
 	/* index of the newest currently available tuple*/
 	unsigned r_available;
 	unsigned s_available;
