@@ -87,6 +87,8 @@ int main(int argc, char **argv) {
 	ctx->range_predicate = false;
 	ctx->batch_mode = false;
 	ctx->linear_data = false;
+	ctx->r_iterations = 1;
+	ctx->s_iterations = 1;
 	
 	/* parse command lines */
 	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:f:F:ePzl")) != -1)
@@ -239,31 +241,35 @@ int main(int argc, char **argv) {
 	
 	/* Setup worker */
 	worker_ctx_t *w_ctx = (worker_ctx_t *) malloc (sizeof (*w_ctx));
-	w_ctx->processing_mode = ctx->processing_mode;
-	w_ctx->idle_window_time = ctx->idle_window_time;
-	w_ctx->process_window_time = ctx->process_window_time;
+	w_ctx->range_predicate = ctx->range_predicate;
+	w_ctx->r_first = 0;
+	w_ctx->s_first = 0;
+	w_ctx->r_available = &(ctx->r_available);
+	w_ctx->s_available = &(ctx->s_available);
+	w_ctx->r_processed = &(ctx->r_processed);
+	w_ctx->s_processed = &(ctx->s_processed);
+	w_ctx->proc_start_time= std::chrono::steady_clock::now();
+	w_ctx->idle_start_time = std::chrono::steady_clock::now();
+        w_ctx->min_cpu_freq = ctx->min_cpu_freq;
+        w_ctx->max_cpu_freq = ctx->max_cpu_freq;
+        w_ctx->min_gpu_freq = ctx->min_gpu_freq;
+        w_ctx->max_gpu_freq = ctx->max_gpu_freq;
 	w_ctx->S.a = ctx->S.a;
 	w_ctx->S.b = ctx->S.b;
 	w_ctx->S.t_ns = ctx->S.t_ns;
 	w_ctx->R.x = ctx->R.x;
 	w_ctx->R.y = ctx->R.y;
 	w_ctx->R.t_ns = ctx->R.t_ns;
-	w_ctx->num_tuples_S = ctx->num_tuples_S;
-	w_ctx->num_tuples_R = ctx->num_tuples_R;
+	w_ctx->processing_mode = ctx->processing_mode;
+	w_ctx->frequency_mode = ctx->frequency_mode;
+	w_ctx->gpu_output_buffer = NULL;
+	w_ctx->gpu_output_buffer_size= 0;
 	w_ctx->window_size_S = ctx->window_size_S;
 	w_ctx->window_size_R = ctx->window_size_R;
-	w_ctx->r_first = 0;
-	w_ctx->s_first = 0;
-	w_ctx->r_processed = &(ctx->r_processed);
-	w_ctx->s_processed = &(ctx->s_processed);
-	w_ctx->r_available = &(ctx->r_available);
-	w_ctx->s_available = &(ctx->s_available);
-        w_ctx->min_cpu_freq = ctx->min_cpu_freq;
-        w_ctx->max_cpu_freq = ctx->max_cpu_freq;
-        w_ctx->min_gpu_freq = ctx->min_gpu_freq;
-        w_ctx->max_gpu_freq = ctx->max_gpu_freq;
-	w_ctx->data_cv = &(ctx->data_cv);
-	w_ctx->data_mutex = &(ctx->data_mutex);
+	w_ctx->num_tuples_S = ctx->num_tuples_S;
+	w_ctx->num_tuples_R = ctx->num_tuples_R;
+	w_ctx->idle_window_time = ctx->idle_window_time;
+	w_ctx->process_window_time = ctx->process_window_time;
 	w_ctx->time_sleep = ctx->time_sleep;
 	w_ctx->time_sleep_control_in_worker = ctx->time_sleep_control_in_worker;
 	w_ctx->r_batch_size = ctx->r_batch_size;
@@ -272,20 +278,22 @@ int main(int argc, char **argv) {
 	w_ctx->gpu_blocksize = ctx->gpu_blocksize;
 	w_ctx->enable_freq_scaling = ctx->enable_freq_scaling;
 	w_ctx->stop_signal = 0;
-	w_ctx->frequency_mode = ctx->frequency_mode;
-	w_ctx->range_predicate = ctx->range_predicate;
+	w_ctx->stop_signal_ack = 0;
 	w_ctx->resultfile = ctx->resultfile;
 		
 	/* Setup statistics*/
 	w_ctx->stats.processed_output_tuples = 0;
 	w_ctx->stats.processed_input_tuples = 0;
 	w_ctx->stats.summed_latency = std::chrono::nanoseconds(0);
-	w_ctx->stats.runtime_idle= 0;
-	w_ctx->stats.runtime_proc= 0;
-	w_ctx->stats.runtime= 0;
+	w_ctx->stats.runtime_idle = 0;
+	w_ctx->stats.runtime_proc = 0;
+	w_ctx->stats.start_time = std::chrono::steady_clock::now();
+	w_ctx->stats.end_time = std::chrono::steady_clock::now();
+	w_ctx->stats.runtime = 0;
+	w_ctx->stats.switches_to_proc = 0;
 	w_ctx->stats.start_time_ts = (struct timespec) { .tv_sec  = 0, .tv_nsec = 0 };
-	w_ctx->stats.output_tuple_map = std::unordered_map<int, int>();
-	w_ctx->stats.cpu_usage = std::unordered_map<int, double>();
+	//w_ctx->stats.output_tuple_map = std::unordered_map<int, int>();
+	//w_ctx->stats.cpu_usage = std::unordered_map<int, double>();
 
 	if (ctx->processing_mode == cpu1_mode)
 		fprintf (ctx->outfile, "# Use CPU 1 core processing mode\n\n");

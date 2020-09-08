@@ -18,8 +18,9 @@ const unsigned long tuple_limit = datasize_limit_mb * 1024 * 1024 /*B*/ / 16;
 
 /* Calculate current nano-seconds */
 std::chrono::nanoseconds get_current_ns(master_ctx_t *ctx, std::chrono::nanoseconds t){
-	unsigned long range = 2.e9 / ctx->rate_R;
-	std::chrono::nanoseconds z(random() % range);
+	unsigned long range = 1.e9 / ctx->rate_R;
+	//unsigned long range = 1.e8 / ctx->rate_R;
+	std::chrono::nanoseconds z(range);//(random() % range);
 	return t + z;
 }
 

@@ -31,8 +31,8 @@
 
 /* --- forward declarations --- */
 void init_worker (worker_ctx_t *w_ctx);
-void process_s (worker_ctx_t *w_ctx);
-void process_r (worker_ctx_t *w_ctx);
+void process_s (master_ctx_t *ctx, worker_ctx_t *w_ctx);
+void process_r (master_ctx_t *ctx, worker_ctx_t *w_ctx);
 void process_s_cpu (worker_ctx_t *w_ctx, unsigned threads);
 void process_r_cpu (worker_ctx_t *w_ctx, unsigned threads);
 void process_s_gpu (worker_ctx_t *w_ctx);
@@ -41,7 +41,7 @@ void process_s_gpu_atomics (worker_ctx_t *w_ctx);
 void process_r_gpu_atomics (worker_ctx_t *w_ctx);
 void interprete_s (worker_ctx_t *w_ctx, int *bitmap);
 void interprete_r (worker_ctx_t *w_ctx, int *bitmap);
-void expire_outdated_tuples (worker_ctx_t *w_ctx);
+void expire_outdated_tuples (worker_ctx_t *w_ctx, master_ctx_t *ctx);
 void set_num_of_threads (worker_ctx_t *w_ctx);
 
 /**
@@ -64,8 +64,8 @@ void start_batch(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	if(w_ctx->enable_freq_scaling)
 		set_freq(w_ctx->frequency_mode, w_ctx->max_cpu_freq, w_ctx->max_gpu_freq);
 	
-	process_r(w_ctx);
-	process_s(w_ctx);
+	process_r(ctx, w_ctx);
+	process_s(ctx, w_ctx);
 	
 	if(w_ctx->enable_freq_scaling)
 		set_freq(w_ctx->frequency_mode, w_ctx->min_cpu_freq, w_ctx->min_gpu_freq);
@@ -109,55 +109,34 @@ void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
         const int next_r = emit_batch_size_r + 1;
         const int next_s = emit_batch_size_s + 1;
 
-	/* Iterations over generated data */
-	size_t iterations_r = 1;
-	size_t iterations_s = 1;
-
-        while ((ctx->r_available + (ctx->generate_tuples_R * (iterations_r-1)) + next_r < ctx->num_tuples_R )
-			&& (ctx->s_available + (ctx->generate_tuples_S * (iterations_s-1)) + next_s < ctx->num_tuples_S) ){ /* Still tuples available */
+        while ((ctx->r_available + (ctx->generate_tuples_R * (ctx->r_iterations-1)) + next_r < ctx->num_tuples_R )
+			&& (ctx->s_available + (ctx->generate_tuples_S * (ctx->s_iterations-1)) + next_s < ctx->num_tuples_S) ){ /* Still tuples available */
 
 		/* Update Iterations */
 		if (ctx->r_available+next_r > ctx->generate_tuples_R){
-			std::cout << "Iteration R: " << iterations_r << "\n";
-			std::cout << ctx->r_available + (ctx->generate_tuples_R * (iterations_r-1)) + next_r << "\n";
-			std::cout << ctx->s_available + (ctx->generate_tuples_S * (iterations_s-1)) + next_s << "\n";
-			iterations_r++;
+			std::cout << "Iteration R: " << ctx->r_iterations << "\n";
+			ctx->r_iterations++;
 			ctx->r_available = 0;
 			ctx->r_processed = 0;
 		}
 		if (ctx->s_available+next_s > ctx->generate_tuples_S){
-			std::cout << "Iteration S: " << iterations_s << "\n";
-			iterations_s++;
+			std::cout << "Iteration S: " << ctx->s_iterations << "\n";
+			std::cout << "Iteration S: " << ctx->generate_tuples_S << "\n";
+			std::cout << "Iteration S: " << ctx->s_available+next_s << "\n";
+			std::cout << "Iteration S: " << ctx->r_available + (ctx->generate_tuples_R * (ctx->r_iterations-1)) << "\n";
+			ctx->s_iterations++;
 			ctx->s_available = 0;
 			ctx->s_processed = 0;
 		}
 
 
 		/* is the next tuple an R or an S tuple? */
-                if (ctx->r_available+next_r >= ctx->num_tuples_R){
+                if (ctx->r_available + (ctx->generate_tuples_R * (ctx->r_iterations-1)) + next_r >= ctx->num_tuples_R ){
                         next_is_R = false; // R Stream ended
-                } else if (ctx->s_available+next_s >= ctx->num_tuples_S) {
+		} else if (ctx->s_available + (ctx->generate_tuples_S * (ctx->s_iterations-1)) + next_s >= ctx->num_tuples_S){
                         next_is_R = true;  // S Stream ended
                 } else {
-			if (iterations_r > 1){
-				auto t = std::chrono::nanoseconds(ctx->R.t_ns[ctx->r_available]);
-				if (ctx->r_available == 0) 
-					t = std::chrono::nanoseconds(ctx->R.t_ns[ctx->generate_tuples_R]);
-				for (int i = ctx->r_available; i < ctx->r_available+next_r; i++) {
-					t = get_current_ns(ctx,t);
-                			ctx->R.t_ns[i] = t;
-				}
-			}
-			if (iterations_s > 1){
-				auto t = std::chrono::nanoseconds(ctx->S.t_ns[ctx->s_available]);
-				if (ctx->s_available == 0) 
-					t = std::chrono::nanoseconds(ctx->S.t_ns[ctx->generate_tuples_S]);
-				for (int i = ctx->s_available; i < ctx->s_available+next_s; i++) {
-					t = get_current_ns(ctx,t);
-                			ctx->S.t_ns[i] = t;
-				}
-			}
-                        next_is_R = (ctx->R.t_ns[ctx->r_available+next_r] < ctx->S.t_ns[ctx->s_available+next_s]);
+                        next_is_R = (r_get_tns(ctx,ctx->r_available+next_r) < s_get_tns(ctx,ctx->s_available+next_s));
                 }
  
 
@@ -166,18 +145,18 @@ void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			//std::cout << "Sleep time (ms): " <<  std::chrono::duration_cast<std::chrono::milliseconds>(
 			//		w_ctx->stats.start_time + ctx->R.t_ns[ctx->r_available+next_r] - timer.now()).count() << "\n";
                         //while(std::chrono::duration_cast<std::chrono::nanoseconds>(w_ctx->stats.start_time 
-                        //                + ctx->R.t_ns[ctx->r_available+next_r] - timer.now()).count() > 0);
+                        //                + r_get_tns(ctx,ctx->r_available+next_r) - timer.now()).count() > 0);
 		
                         std::this_thread::sleep_for(w_ctx->stats.start_time
-                                        + ctx->R.t_ns[ctx->r_available+next_r] - timer.now());
+                                        + r_get_tns(ctx,ctx->r_available+next_r) - timer.now());
 		} else {
 			//std::cout << "Sleep time (ms): " <<  std::chrono::duration_cast<std::chrono::milliseconds>(
 			//		w_ctx->stats.start_time + ctx->S.t_ns[ctx->s_available+next_s] - timer.now()).count() << "\n";
                         //while(std::chrono::duration_cast<std::chrono::nanoseconds>(w_ctx->stats.start_time 
-                        //                + ctx->S.t_ns[ctx->s_available+next_s] - timer.now()).count() > 0);
+                        //                + s_get_tns(ctx,ctx->s_available+next_s) - timer.now()).count() > 0);
 
                         std::this_thread::sleep_for(w_ctx->stats.start_time
-                                       + ctx->S.t_ns[ctx->s_available+next_s] - timer.now());
+                                       + s_get_tns(ctx,ctx->s_available+next_s) - timer.now());
 		}
 
                 if (next_is_R){
@@ -187,7 +166,7 @@ void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 				if(w_ctx->enable_freq_scaling)
 					set_freq(w_ctx->frequency_mode, w_ctx->max_cpu_freq, w_ctx->max_gpu_freq);
 				w_ctx->stats.switches_to_proc++;
-				process_r(w_ctx);
+				process_r(ctx, w_ctx);
 				if(w_ctx->enable_freq_scaling)
 					set_freq(w_ctx->frequency_mode, w_ctx->min_cpu_freq, w_ctx->min_gpu_freq);
                         }
@@ -198,14 +177,14 @@ void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 				if(w_ctx->enable_freq_scaling)
 					set_freq(w_ctx->frequency_mode, w_ctx->max_cpu_freq, w_ctx->max_gpu_freq);
 				w_ctx->stats.switches_to_proc++;
-				process_s(w_ctx);
+				process_s(ctx, w_ctx);
 				if(w_ctx->enable_freq_scaling)
 					set_freq(w_ctx->frequency_mode, w_ctx->min_cpu_freq, w_ctx->min_gpu_freq);
                         }
 
                 }
 		
-		expire_outdated_tuples (w_ctx);
+		expire_outdated_tuples (w_ctx,ctx);
 
 	}
 	
@@ -259,7 +238,7 @@ void set_num_of_threads (worker_ctx_t *w_ctx){
 	}
 }
 
-void process_s (worker_ctx_t *w_ctx){
+void process_s (master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	if (w_ctx->processing_mode == cpu1_mode){
 		process_s_cpu(w_ctx,1);
 	} else if (w_ctx->processing_mode == cpu2_mode){
@@ -276,18 +255,18 @@ void process_s (worker_ctx_t *w_ctx){
 		//process_s_ht_cpu(w_ctx,1);
 		//mt_tbb::process_s_ht_cpu(w_ctx,1);
 		//mt_atomic::process_s_ht_cpu(w_ctx,1);
-		mt_atomic_chunk::process_s_ht_cpu(w_ctx);
+		mt_atomic_chunk::process_s_ht_cpu(ctx, w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu2_mode){
-		mt_atomic_chunk::process_s_ht_cpu(w_ctx);
+		mt_atomic_chunk::process_s_ht_cpu(ctx, w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu3_mode){
-		mt_atomic_chunk::process_s_ht_cpu(w_ctx);
+		mt_atomic_chunk::process_s_ht_cpu(ctx, w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu4_mode){
-		mt_atomic_chunk::process_s_ht_cpu(w_ctx);
+		mt_atomic_chunk::process_s_ht_cpu(ctx, w_ctx);
 	}
 	w_ctx->stats.processed_input_tuples += w_ctx->s_batch_size;
 }
 
-void process_r (worker_ctx_t *w_ctx){
+void process_r (master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	if (w_ctx->processing_mode == cpu1_mode){
 		process_r_cpu(w_ctx,1);
 	} else if (w_ctx->processing_mode == cpu2_mode){
@@ -301,16 +280,16 @@ void process_r (worker_ctx_t *w_ctx){
 	} else if (w_ctx->processing_mode == atomic_mode){
 		process_r_gpu_atomics(w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu1_mode){
-		mt_atomic_chunk::process_r_ht_cpu(w_ctx);
+		mt_atomic_chunk::process_r_ht_cpu(ctx, w_ctx);
 		//mt_atomic::process_r_ht_cpu(w_ctx,1);
 		//mt_tbb::process_r_ht_cpu(w_ctx,1);
 		//process_r_ht_cpu(w_ctx,1);
 	} else if (w_ctx->processing_mode == ht_cpu2_mode){
-		mt_atomic_chunk::process_r_ht_cpu(w_ctx);
+		mt_atomic_chunk::process_r_ht_cpu(ctx, w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu3_mode){
-		mt_atomic_chunk::process_r_ht_cpu(w_ctx);
+		mt_atomic_chunk::process_r_ht_cpu(ctx, w_ctx);
 	} else if (w_ctx->processing_mode == ht_cpu4_mode){
-		mt_atomic_chunk::process_r_ht_cpu(w_ctx);
+		mt_atomic_chunk::process_r_ht_cpu(ctx, w_ctx);
 	}
 	w_ctx->stats.processed_input_tuples += w_ctx->r_batch_size;
 }
@@ -563,11 +542,11 @@ void process_s_cpu (worker_ctx_t *w_ctx, unsigned threads){
 			if (w_ctx->range_predicate){
 				const a_t a = w_ctx->S.a[s] - w_ctx->R.x[r];
 				const b_t b = w_ctx->S.b[s] - w_ctx->R.y[r];
-				if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
-				    emit_result (w_ctx, r, s);
+				//if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
+				    //emit_result (w_ctx, r, s);
 			} else {
-				if (w_ctx->S.a[s] + w_ctx->S.b[s] == w_ctx->R.x[r] + w_ctx->R.y[r])
-				    emit_result (w_ctx, r, s);
+				//if (w_ctx->S.a[s] + w_ctx->S.b[s] == w_ctx->R.x[r] + w_ctx->R.y[r])
+				    //emit_result (w_ctx, r, s);
 			}
 		}
 	}
@@ -588,11 +567,11 @@ void process_r_cpu (worker_ctx_t *w_ctx, unsigned threads){
 			if (w_ctx->range_predicate){
 				const a_t a = w_ctx->S.a[s] - w_ctx->R.x[r];
 				const b_t b = w_ctx->S.b[s] - w_ctx->R.y[r];
-				if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
-				    emit_result (w_ctx, r, s);
+				//if ((a > -10) & (a < 10) & (b > -10.) & (b < 10.))
+				    //emit_result (w_ctx, r, s);
 			} else {
-				if (w_ctx->S.a[s] + w_ctx->S.b[s] == w_ctx->R.x[r] + w_ctx->R.y[r])
-				    emit_result (w_ctx, r, s);
+				//if (w_ctx->S.a[s] + w_ctx->S.b[s] == w_ctx->R.x[r] + w_ctx->R.y[r])
+				    //emit_result (w_ctx, r, s);
 			}
 		}
 	}
@@ -607,21 +586,21 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 {   	
 	Timer::Timer timer = Timer::Timer();
 
-	/* Choose the older tuple to calc the latency */
+	/* Choose the older tuple to calc the latency /
 	auto now = timer.now();
-	if (w_ctx->S.t_ns[s] < w_ctx->R.t_ns[r]){
+	if (s_get_tns(ctx,s) < r_get_tns(ctx,r)){
 		auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>
-				(now -  w_ctx->stats.start_time) - w_ctx->R.t_ns[r]);
+				(now -  w_ctx->stats.start_time) - r_get_tns(ctx,r));
 		w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>
 			(w_ctx->stats.summed_latency + i);
 	} else { 
 		auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>
-				(now -  w_ctx->stats.start_time) - w_ctx->S.t_ns[s]);
+				(now -  w_ctx->stats.start_time) - s_get_tns(ctx,s));
 		w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>
 			(w_ctx->stats.summed_latency + i);
 	}
 
-	/* Output tuple statistics */
+	/* Output tuple statistics /
 	w_ctx->stats.processed_output_tuples++;
 	
 	//int sec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - w_ctx->stats.start_time ).count();
@@ -629,32 +608,33 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 
 	// Write into resultfile
 	fprintf (w_ctx->resultfile, "%d %d\n", r,s);
+*/
 }
 
 void
-expire_outdated_tuples_ (worker_ctx_t *w_ctx){
+expire_outdated_tuples_ (worker_ctx_t *w_ctx, master_ctx_t *ctx){
    	const int s_processed = *(w_ctx->s_processed);
    	const int r_processed = *(w_ctx->r_processed);
 
-	while ((w_ctx->R.t_ns[w_ctx->r_first].count() + w_ctx->window_size_R*1000000000L) 
-			< w_ctx->S.t_ns[s_processed].count()){
+	while ((r_get_tns(ctx,w_ctx->r_first).count() + w_ctx->window_size_R*1000000000L) 
+			< s_get_tns(ctx,s_processed).count()){
 		 w_ctx->r_first++;
 	}
 
-	while ((w_ctx->S.t_ns[w_ctx->s_first].count() + w_ctx->window_size_S*1000000000L) 
-			< w_ctx->R.t_ns[r_processed].count()){
+	while ((s_get_tns(ctx,w_ctx->s_first).count() + w_ctx->window_size_S*1000000000L) 
+			< r_get_tns(ctx,r_processed).count()){
 		 w_ctx->s_first++;
 	}
 }
 
 void
-expire_outdated_tuples (worker_ctx_t *w_ctx){
+expire_outdated_tuples (worker_ctx_t *w_ctx, master_ctx_t *ctx){
 	if (w_ctx->processing_mode == cpu1_mode
         	|| w_ctx->processing_mode == cpu2_mode
          	|| w_ctx->processing_mode == cpu3_mode 
        		|| w_ctx->processing_mode == cpu4_mode
        		|| w_ctx->processing_mode == gpu_mode
        		|| w_ctx->processing_mode == atomic_mode) {
-		expire_outdated_tuples_ (w_ctx);
+		expire_outdated_tuples_ (w_ctx, ctx);
 	}
 }
