@@ -38,7 +38,7 @@ while (($max - $min) / ($max + $min) >= 0.005)
 {
     my $num_tuples = $duration * $rate;
 
-    my $retval = system ("../bin/gpu_stream -r $rate -R $rate -n $num_tuples -N $num_tuples -w $window_size_R -W $window_size_S");
+    my $retval = system ("../../bin/gpu_stream -r $rate -R $rate -n $num_tuples -N $num_tuples -w $window_size_R -W $window_size_S -p ht_cpu4 -l");
 
     print "Run with rate $rate " . ($retval == 0 ? "was successful" : "failed");
     print ".\n";

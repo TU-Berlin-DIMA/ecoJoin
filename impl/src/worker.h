@@ -21,12 +21,6 @@ struct worker_ctx_t {
     /* use a range prediacate to join */
     bool range_predicate;
 
-    /* Message to send already */
-    struct {
-        unsigned int   pos;   /**< number of tuples already in the message */
-        result_msg_t   msg;   /**< the partial message itself */
-    } partial_result_msg;
-
     /* Current start of the window for r and s*/
     unsigned r_first;
     unsigned s_first;
@@ -40,14 +34,9 @@ struct worker_ctx_t {
     unsigned *s_processed;
 
     /* keeps track of time spent idle or processing */ 
-    std::chrono::time_point<std::chrono::system_clock> proc_start_time;
-    std::chrono::time_point<std::chrono::system_clock> idle_start_time;
+    std::chrono::time_point<std::chrono::steady_clock> proc_start_time;
+    std::chrono::time_point<std::chrono::steady_clock> idle_start_time;
     
-    /* vars to lock x_available */
-    // See: https://en.cppreference.com/w/cpp/thread/condition_variable
-    std::condition_variable *data_cv;
-    std::mutex *data_mutex;
-
     /* minimum and maximum frequencies */
     unsigned min_cpu_freq;
     unsigned max_cpu_freq;
@@ -80,10 +69,8 @@ struct worker_ctx_t {
      */
     processing_mode_e processing_mode;
 
-
     /* scale frequency of gpu, cpu or both */
     frequency_mode_e frequency_mode;
-
 
     /* Pointer to the Buffer that the gpu uses to write to */
     int *gpu_output_buffer;
@@ -96,7 +83,6 @@ struct worker_ctx_t {
 
     /** window size for S (in sec) **/
     unsigned window_size_S;
-
 
     /** number of tuples in S (in sec) **/
     unsigned num_tuples_S;
@@ -139,7 +125,8 @@ struct worker_ctx_t {
 
 
 
-void *start_worker(void *ctx);
+void start_batch(master_ctx_t *ctx, worker_ctx_t *w_ctx);
+void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx);
 void end_processing(worker_ctx_t *w_ctx);
 void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s);
 #endif  /* WORKER_H */

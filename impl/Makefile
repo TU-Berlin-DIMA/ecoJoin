@@ -8,8 +8,8 @@ TARGET   = gpu_stream
 #LFLAGS   =  -gencode arch=compute_53,code=sm_53 -g -lcpufreq -lgomp -ltbb -Xcompiler=-fno-omit-frame-pointer --profile
 
 # Build
-CUFLAGS  = -std=c++11 -gencode arch=compute_53,code=sm_53 -Xcompiler=-fopenmp -O3
-CFLAGS   = -std=c++11 -I. -g -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -fopenmp -O3
+CUFLAGS  = -std=c++11 -gencode arch=compute_53,code=sm_53 -Xcompiler=-fopenmp  -O3 -Xcompiler=-Wall
+CFLAGS   = -std=c++11 -I. -g -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -fopenmp -O3 -Wall
 LFLAGS   = -gencode arch=compute_53,code=sm_53 -lcpufreq -lgomp -ltbb
 
 
