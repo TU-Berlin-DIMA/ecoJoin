@@ -161,7 +161,7 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 	// Calculate Latency
 	// INFLUENCES MULTITHREADED PERFORMANCE SIGNIFICANTLY:
         /* Choose the older tuple to calc the latency*/
-        /*auto now = std::chrono::system_clock::now();
+        auto now = std::chrono::steady_clock::now();
         if (w_ctx->S.t_ns[s] < w_ctx->R.t_ns[r]){
                 auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) - w_ctx->R.t_ns[r]);
                 #pragma omp critical
@@ -170,7 +170,7 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
                 auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) - w_ctx->S.t_ns[s]);
                 #pragma omp critical
                 w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>(w_ctx->stats.summed_latency + i);
-        }*/
+        }
 	
 	// Print into resultfile
 	fprintf (w_ctx->resultfile, "%d %d\n", r,s);
