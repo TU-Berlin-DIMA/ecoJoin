@@ -156,7 +156,7 @@ void print_ht(worker_ctx_t *w_ctx){
 }
 
 
-void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
+void calc_latency (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
 {
 	// Calculate Latency
 	// INFLUENCES MULTITHREADED PERFORMANCE SIGNIFICANTLY:
@@ -171,9 +171,6 @@ void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s)
                 #pragma omp critical
                 w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>(w_ctx->stats.summed_latency + i);
         }
-	
-	// Print into resultfile
-	fprintf (w_ctx->resultfile, "%d %d\n", r,s);
 }
 
 
@@ -266,6 +263,7 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 					//cout << "S: " << s << " " << k << "\n";
 						out_tuples.push_back(tuple<uint32_t, uint32_t>(r,s));
 						emitted_tuples++;
+						calc_latency(w_ctx, r, s);
 					}
 				} else { // Invalid
 					to_delete_bitmap[hash] = 1;
@@ -420,6 +418,7 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 						//cout << "R: " << r << " " << k << "\n";
 						out_tuples.push_back(tuple<uint32_t, uint32_t>(r,s));
 						emitted_tuples++;
+						calc_latency(w_ctx, r, s);
 					} 
 				} else { // Invalid
 					to_delete_bitmap[hash] = 1;
