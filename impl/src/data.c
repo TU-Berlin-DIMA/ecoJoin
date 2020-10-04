@@ -13,7 +13,7 @@
 
 /* Limit for generated data, Tuples above the limit are not generated but simulated by
  * reloading again existing tuples */
-const size_t datasize_limit_mb = 32;//256;
+const size_t datasize_limit_mb = 256;
 const unsigned long tuple_limit = datasize_limit_mb * 1024 * 1024 /*B*/ / 16;
 
 /* Calculate current nano-seconds */
@@ -118,21 +118,42 @@ void generate_data (master_ctx_t *ctx)
 	    {
 		t = get_current_ns(ctx,t);
 		ctx->R.t_ns[i] = t;
+		
+		int j = random () % ctx->int_value_range;
+		if (i % 2 == 0) {
+			ctx->R.x[i] = j / 2;
+			ctx->R.y[i] = j / 2;
+		} else {
+			ctx->R.x[i] = (j / 2) + 1;
+			ctx->R.y[i] = j / 2;
+		}
 
+		/*
 		ctx->R.x[i] = random () % ctx->int_value_range;
 		ctx->R.y[i] = (float) (random () % ctx->float_value_range);
+		*/
 	    }
 
 	    /* generate data for S */
     	    t = std::chrono::nanoseconds(0);
 	    for (unsigned int i = 0; i < ctx->generate_tuples_S; i++)
 	    {
-
 		t = get_current_ns(ctx,t);
 		ctx->S.t_ns[i] = t;
+		int j = random () % ctx->int_value_range;
 
+		if (j % 2 == 0) {
+			ctx->S.a[i] = j / 2;
+			ctx->S.b[i] = j / 2;
+		} else {
+			ctx->S.a[i] = (j / 2) + 1;
+			ctx->S.b[i] = j / 2;
+		}
+
+		/*
 		ctx->S.a[i] = random () % ctx->int_value_range;
 		ctx->S.b[i] = (float) (random () % ctx->float_value_range);
+		*/
 	    }
     } else { // linear data
 	    std::cout << "# Create Linear Dataset\n";

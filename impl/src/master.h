@@ -62,7 +62,7 @@ struct master_ctx_t {
 	unsigned int_value_range;
 
 	/** value range for the join attribute of type @c float (y and b) **/
-	unsigned float_value_range;
+	long float_value_range;
 
 	/** File to write the result tuples to  **/
 	FILE *resultfile;

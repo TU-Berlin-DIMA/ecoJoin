@@ -17,10 +17,10 @@ using namespace std;
 
 namespace mt_atomic_chunk {
 // do not change
-static const long n_sec = 1000000000L;
+static const long long n_sec = 1000000000L;
 static const int uint64_t_size = 64;
 static const int cacheline_size = 64;
-static const int tpl_per_chunk  = uint64_t_size*2;
+static const int tpl_per_chunk  = uint64_t_size*1;
 
 // Parameters
 static const int ht_size = 2000000;
@@ -192,21 +192,28 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
             r < *(w_ctx->r_processed) + w_ctx->r_batch_size;
             r++){
                 const uint32_t k = w_ctx->R.x[r] + w_ctx->R.y[r];
+		
+
+		/*if (k == 9898){
+			cout <<  w_ctx->R.x[r] << " " <<  w_ctx->R.y[r] << "\n";
+		}*/
 
 		/* Linear */
-		//uint32_t hash = k;
-		//hash = (hash % ht_size);
+		uint32_t hash = k;
+		hash = (hash % ht_size);
 
 		/* Murmur*/
-		uint32_t hash;
+		/*uint32_t hash;
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
-		hash = (hash % ht_size);/**/
+		hash = (hash % ht_size);*/
 		
 		uint32_t tpl_cntr = hmR[hash].counter.fetch_add(1,std::memory_order_relaxed);
 
 		if (tpl_cntr >= tpl_per_chunk) {
 			cout << hash << " " << tpl_cntr << "\n";
-			cout << "Chunk full\n";
+			cout << "Chunk full at index: " << hash  << "\n";
+			for (int i = 0; i < tpl_cntr*2 ; i++)
+				cout << ((uint32_t*) hmR[hash].address)[i] << "\n";
 			exit(1);
 		}
 
@@ -234,13 +241,13 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
                 const uint32_t k = w_ctx->R.x[r] + w_ctx->R.y[r];
 
 		/* Linear*/
-		//uint32_t hash = k;
-		//hash = (hash % ht_size);
+		uint32_t hash = k;
+		hash = (hash % ht_size);
 
 		/* Murmur */
-		uint32_t hash;
+		/*uint32_t hash;
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
-		hash = (hash % ht_size);/**/
+		hash = (hash % ht_size);*/
 		
 		unsigned emitted_tuples = 0;
 		unsigned to_delete_tuples = 0;
@@ -301,7 +308,7 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	//cout << "delete: " << to_delete_sum << " tuples\n";
 	/* Clean-up S HT */
 	if (to_delete_sum > cleanup_threshold) {
-		cout << "delete: " << to_delete_sum << " tuples\n";
+		//cout << "delete: " << to_delete_sum << " tuples\n";
 #pragma omp parallel for
 		for (size_t i = 0; i < ht_size; i++){
 			if (to_delete_bitmap.test(i)){
@@ -360,7 +367,9 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 
 		if (tpl_cntr >= tpl_per_chunk) {
 			cout << hash << " " << tpl_cntr << "\n";
-			cout << "Chunk full\n";
+			cout << "Chunk full at index: " << hash  << "\n";
+			for (int i = 0; i < tpl_cntr*2 ; i++)
+				cout << ((uint32_t*) hmS[hash].address)[i] << "\n";
 			exit(1);
 		}
 
@@ -406,7 +415,7 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			for (int j = 0; j < tpl_cntr; j++){
 				const uint32_t r = cur_chunk[(j*2)+1];
 				if ((r_get_tns(ctx,r).count() + w_ctx->window_size_R * n_sec)
-					> s_get_tns(ctx,s).count()) {
+					> s_get_tns(ctx,s).count()) { // Valid
 					if (cur_chunk[j*2] == k) { // match
 						//cout << "R: " << r << " " << k << "\n";
 						out_tuples.push_back(tuple<uint32_t, uint32_t>(r,s));
@@ -452,17 +461,23 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	/* Clean-up R HT */
 	//if (!to_delete_bitmap.none()) {
 	if (to_delete_sum > cleanup_threshold) {
-		cout << "delete " << to_delete_sum << " tuples\n";
+		//cout << "delete " << to_delete_sum << " tuples\n";
 #pragma omp parallel for
 		for (size_t i = 0; i < ht_size; i++){
 			if (to_delete_bitmap.test(i)){
 				//cout << "delete " << i << "\n";
 				uint32_t tpl_cnt = hmR[i].counter.load(std::memory_order_relaxed);
 				uint32_t *chunk = (uint32_t*) hmR[i].address; // head
+				if (i == 1500)
+					cout << "Remove\n";
+				//cout << tpl_cnt << "\n";
+				//for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
+				//	cout << "before: "<< chunk[(j*2)+1] << "\n";
+				//}
 				for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
 					const size_t r = chunk[(j*2)+1];
 					if ((r_get_tns(ctx,r).count() + w_ctx->window_size_R * n_sec) 
-						< r_get_tns(ctx,*(w_ctx->s_processed)).count()) {
+						< r_get_tns(ctx,*(w_ctx->r_processed)).count()) {
 						// Remove + Move
 						for (int u = 0, l = 0; u < tpl_cnt; u++) {
 							if ((u != j || u != j+1) && u != l) {
@@ -475,6 +490,9 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 						hmR[i].counter--; // Update tpl counter
 					}
 				}
+				//for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
+				//	cout << "after: "<< chunk[(j*2)+1] << "\n";
+				//}
 			}
 		}
 	}

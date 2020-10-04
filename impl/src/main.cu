@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <limits.h>
+#include <float.h>
 #include <iostream>
 #include <thread>
 #include <condition_variable>
@@ -66,8 +68,8 @@ int main(int argc, char **argv) {
 	ctx->window_size_R = 600;
 	ctx->num_tuples_S = 1800000;
 	ctx->num_tuples_R = 1800000;
-	ctx->int_value_range   = 10000;
-	ctx->float_value_range = 10000;
+	ctx->int_value_range   = INT_MAX;
+	ctx->float_value_range = FLT_MAX;
 	ctx->processing_mode = cpu1_mode;
 	ctx->idle_window_time = 0;
 	ctx->process_window_time = 10;
