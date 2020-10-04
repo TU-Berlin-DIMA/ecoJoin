@@ -17,11 +17,11 @@ use Getopt::Long;
 
 use IO::Handle;
 
-my $min           = 100.;
-my $max           = 10000.;
-my $duration      = 3600;
-my $window_size_R = 10 * 60;
-my $window_size_S = 10 * 60;
+my $min           = 1000.;
+my $max           = 100000.;
+my $duration      = 3600; # 1 h
+my $window_size_R = 10 * 60; # 10 min
+my $window_size_S = 10 * 60; 
 
 my $rate          = undef;
 my $cores         = undef;
