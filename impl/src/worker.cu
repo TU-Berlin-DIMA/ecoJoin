@@ -92,22 +92,24 @@ void start_batch(master_ctx_t *ctx, worker_ctx_t *w_ctx){
  */
 void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 
-	Timer::Timer timer = Timer::Timer();
-	
 	init_worker(w_ctx);
 
 	set_num_of_threads(w_ctx);
 
+	Timer::Timer timer = Timer::Timer();
+        w_ctx->stats.start_time = timer.now();
+        auto start_time = timer.now();
+        auto end_time = timer.now();
+
 	/* is the next tuple from the R stream */
         bool next_is_R;
-
-        w_ctx->stats.start_time = timer.now();
 
         /* size of tuple batch to release */
         const int emit_batch_size_r = w_ctx->r_batch_size-1;
         const int emit_batch_size_s = w_ctx->s_batch_size-1;
         const int next_r = emit_batch_size_r + 1;
         const int next_s = emit_batch_size_s + 1;
+
 
         while ((ctx->r_available + (ctx->generate_tuples_R * (ctx->r_iterations-1)) + next_r < ctx->num_tuples_R )
 			&& (ctx->s_available + (ctx->generate_tuples_S * (ctx->s_iterations-1)) + next_s < ctx->num_tuples_S) ){ /* Still tuples available */
@@ -121,9 +123,6 @@ void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 		}
 		if (ctx->s_available+next_s > ctx->generate_tuples_S){
 			std::cout << "Iteration S: " << ctx->s_iterations << "\n";
-			std::cout << "Iteration S: " << ctx->generate_tuples_S << "\n";
-			std::cout << "Iteration S: " << ctx->s_available+next_s << "\n";
-			std::cout << "Iteration S: " << ctx->r_available + (ctx->generate_tuples_R * (ctx->r_iterations-1)) << "\n";
 			ctx->s_iterations++;
 			ctx->s_available = 0;
 			ctx->s_processed = 0;
@@ -166,7 +165,13 @@ void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 				if(w_ctx->enable_freq_scaling)
 					set_freq(w_ctx->frequency_mode, w_ctx->max_cpu_freq, w_ctx->max_gpu_freq);
 				w_ctx->stats.switches_to_proc++;
+				end_time = timer.now();
+				w_ctx->stats.runtime_idle += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+
 				process_r(ctx, w_ctx);
+
+				start_time = timer.now();
+
 				if(w_ctx->enable_freq_scaling)
 					set_freq(w_ctx->frequency_mode, w_ctx->min_cpu_freq, w_ctx->min_gpu_freq);
                         }
@@ -177,7 +182,13 @@ void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 				if(w_ctx->enable_freq_scaling)
 					set_freq(w_ctx->frequency_mode, w_ctx->max_cpu_freq, w_ctx->max_gpu_freq);
 				w_ctx->stats.switches_to_proc++;
+				end_time = timer.now();
+				w_ctx->stats.runtime_idle += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+
 				process_s(ctx, w_ctx);
+
+				start_time = timer.now();
+
 				if(w_ctx->enable_freq_scaling)
 					set_freq(w_ctx->frequency_mode, w_ctx->min_cpu_freq, w_ctx->min_gpu_freq);
                         }
