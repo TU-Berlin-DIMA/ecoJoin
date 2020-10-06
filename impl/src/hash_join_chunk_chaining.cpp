@@ -30,7 +30,6 @@ static const int output_buffer_tuples = 2000000;
 static const int output_buffersize = output_buffer_tuples * sizeof(uint32_t) * 2;
 
 // do not change
-static const int max_try = ht_size;
 static const int chunk_size = tpl_per_chunk * sizeof(uint32_t) * 2;
 
 /* keep track of processed tuples */
@@ -53,7 +52,7 @@ uint32_t *output;
 
 void init_ht(){
 	cout << "# Use a hash table size of " << ht_size << " chunks with " << tpl_per_chunk << " tuples\n";
-	cout << "# Total hash table size is " << ht_size * tpl_per_chunk * 8 /*byte*/ 
+	cout << "# Total hash table size is " << ht_size * tpl_per_chunk * sizeof(uint32_t) * 2 /*byte*/ 
 		/ 1048576 /*MB*/ << " MB\n";
 
         posix_memalign((void**)&hmR, 64, ht_size*sizeof(ht));
@@ -216,7 +215,7 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			ofstream file;
 			file.open ("ht_dump.txt");
 			for (int i = 0; i < ht_size; i++) 
-				file << hmR[i].counter.load(std::memory_order_relaxed);
+				file << hmR[i].counter.load(std::memory_order_relaxed) << "\n";
 			file.close();
 			exit(1);
 		}
@@ -379,7 +378,7 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			ofstream file;
 			file.open ("ht_dump.txt");
 			for (int i = 0; i < ht_size; i++) 
-				file << hmS[i].counter.load(std::memory_order_relaxed);
+				file << hmS[i].counter.load(std::memory_order_relaxed) << "\n";
 			file.close();
 
 			exit(1);
