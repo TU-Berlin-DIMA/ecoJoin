@@ -5,6 +5,7 @@
 #include <atomic>
 #include <algorithm>
 #include <sstream>
+#include <fstream>
 #include <bitset>
 
 #include "omp.h"
@@ -196,13 +197,13 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 		}*/
 
 		/* Linear */
-		uint32_t hash = k;
-		hash = (hash % ht_size);
+		/*uint32_t hash = k;
+		hash = (hash % ht_size);*/
 
 		/* Murmur*/
-		/*uint32_t hash;
+		uint32_t hash;
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
-		hash = (hash % ht_size);*/
+		hash = (hash % ht_size);
 		
 		uint32_t tpl_cntr = hmR[hash].counter.fetch_add(1,std::memory_order_relaxed);
 
@@ -211,6 +212,12 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			cout << "Chunk full at index: " << hash  << "\n";
 			for (int i = 0; i < tpl_cntr*2 ; i++)
 				cout << ((uint32_t*) hmR[hash].address)[i] << "\n";
+			/* Write HT dump */
+			ofstream file;
+			file.open ("ht_dump.txt");
+			for (int i = 0; i < ht_size; i++) 
+				file << hmR[i].counter.load(std::memory_order_relaxed);
+			file.close();
 			exit(1);
 		}
 
@@ -238,13 +245,13 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
                 const uint32_t k = w_ctx->R.x[r] + w_ctx->R.y[r];
 
 		/* Linear*/
-		uint32_t hash = k;
-		hash = (hash % ht_size);
+		/*uint32_t hash = k;
+		hash = (hash % ht_size);*/
 
 		/* Murmur */
-		/*uint32_t hash;
+		uint32_t hash;
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
-		hash = (hash % ht_size);*/
+		hash = (hash % ht_size);
 		
 		unsigned emitted_tuples = 0;
 		unsigned to_delete_tuples = 0;
@@ -353,13 +360,13 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
                 const uint32_t k = w_ctx->S.a[s] + w_ctx->S.b[s];
 
 		/* Linear*/
-		uint32_t hash = k;
-		hash = (hash % ht_size);
+		/*uint32_t hash = k;
+		hash = (hash % ht_size);*/
 
-		/* Murmur
+		/* Murmur*/
 		uint32_t hash;
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
-		hash = (hash % ht_size);*/
+		hash = (hash % ht_size);
 		
 		uint32_t tpl_cntr = hmS[hash].counter.fetch_add(1,std::memory_order_relaxed);
 
@@ -368,6 +375,13 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			cout << "Chunk full at index: " << hash  << "\n";
 			for (int i = 0; i < tpl_cntr*2 ; i++)
 				cout << ((uint32_t*) hmS[hash].address)[i] << "\n";
+			/* Write HT dump */
+			ofstream file;
+			file.open ("ht_dump.txt");
+			for (int i = 0; i < ht_size; i++) 
+				file << hmS[i].counter.load(std::memory_order_relaxed);
+			file.close();
+
 			exit(1);
 		}
 
@@ -395,14 +409,14 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
             s++){
                 const uint32_t k = w_ctx->S.a[s] + w_ctx->S.b[s];
 
-		/* Linear*/
+		/* Linear
 		uint32_t hash = k;
-		hash = (hash % ht_size);
+		hash = (hash % ht_size);*/
 
-		/* Murmur
+		/* Murmur */
 		uint32_t hash;
 		MurmurHash3_x86_32((void*)&k, sizeof(uint32_t), 1, &hash);
-		hash = (hash % ht_size);*/
+		hash = (hash % ht_size);
 		
 		unsigned emitted_tuples = 0;
 		unsigned to_delete_tuples = 0;
