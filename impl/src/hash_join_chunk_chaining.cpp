@@ -61,8 +61,8 @@ ht *hmR;
 ht *hmS;
 
 // Cleanup Bitmap
-uint64_t *cleanupR;
-uint64_t *cleanupS;
+dynamic_bitset<> to_delete_bitmap_S;
+dynamic_bitset<> to_delete_bitmap_R;
 
 // Output Tuples Buffer
 uint32_t *output;
@@ -136,8 +136,8 @@ void init(master_ctx_t *ctx){
 	posix_memalign((void**)&output, 64, output_buffersize);
 	
 	/* Init clean-up bitmap */
-	//posix_memalign((void**)&cleanupR, 64, cacheline_size*ht_size)
-	//posix_memalign((void**)&cleanupS, 64, cacheline_size*ht_size)
+ 	to_delete_bitmap_S = dynamic_bitset<>(ht_size);
+ 	to_delete_bitmap_R = dynamic_bitset<>(ht_size);
 }
 
 /* Calculate Latency for statistic output
@@ -239,7 +239,6 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
         // Probe S HT
 	unsigned emitted_sum = 0;
         unsigned to_delete_sum = 0;
-	dynamic_bitset<> to_delete_bitmap(ht_size);
 #pragma omp parallel for reduction(+: emitted_sum, to_delete_sum)
         for (unsigned r = *(w_ctx->r_processed);
             r < *(w_ctx->r_processed) + w_ctx->r_batch_size;
@@ -271,7 +270,7 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 						calc_latency(w_ctx, *chunk, j);
 					}
 				} else { // Invalid
-					to_delete_bitmap[hash] = 1;
+					to_delete_bitmap_S[hash] = 1;
 					to_delete_tuples++;
 				}
 			}
@@ -310,7 +309,7 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	if (to_delete_sum > cleanup_threshold) {
 #pragma omp parallel for
 		for (size_t i = 0; i < ht_size; i++){
-			if (to_delete_bitmap.test(i)){
+			if (to_delete_bitmap_S.test(i)){
 				uint32_t tpl_cnt = hmS[i].counter.load(std::memory_order_relaxed);
 				chunk_S *chunk = (chunk_S*) hmS[i].address; // head
 				for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
@@ -332,6 +331,7 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 				}
 			}
 		}
+		to_delete_bitmap_S.reset();
 	}
 
 #ifdef DEBUG
@@ -438,7 +438,7 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 						calc_latency(w_ctx, *chunk, j);
 					} 
 				} else { // Invalid
-					to_delete_bitmap[hash] = 1;
+					to_delete_bitmap_R[hash] = 1;
 					to_delete_tuples++;
 				}
 			}
@@ -477,7 +477,7 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	if (to_delete_sum > cleanup_threshold) {
 #pragma omp parallel for
 		for (size_t i = 0; i < ht_size; i++){
-			if (to_delete_bitmap.test(i)){
+			if (to_delete_bitmap_R.test(i)){
 				uint32_t tpl_cnt = hmR[i].counter.load(std::memory_order_relaxed);
 				chunk_R *chunk = (chunk_R*) hmR[i].address; // head
 				for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
@@ -499,6 +499,7 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 				}
 			}
 		}
+		to_delete_bitmap_R.reset();
 	}
 	
 #ifdef DEBUG
