@@ -10,8 +10,9 @@
  * The schema [ x:int, y:float, z:char[20] ] is adapted from the
  * CellJoin paper.
  */
-typedef int   x_t;
-typedef float y_t;
+typedef int     x_t;
+typedef float   y_t;
+typedef uint8_t i_t;
 //typedef char  z_t[20];
 
 /**

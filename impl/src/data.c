@@ -13,7 +13,9 @@
 
 /* Limit for generated data, Tuples above the limit are not generated but simulated by
  * reloading again existing tuples */
-const size_t datasize_limit_mb = 256;
+const size_t datasize_limit_mb = 16;
+//const size_t datasize_limit_mb = 256;
+
 const unsigned long tuple_limit = datasize_limit_mb * 1024 * 1024 /*B*/ / 16;
 
 /* Calculate current nano-seconds */
@@ -37,6 +39,7 @@ void generate_data (master_ctx_t *ctx)
     std::cout << "# Tuple generation limit " << tuple_limit << " tuples / " << datasize_limit_mb << "MB\n";
     std::cout << "# Total datasize of stream is " << ctx->num_tuples_R*16/*B*/ / 1024 / 1024<< "MB\n";
 
+
     std::chrono::nanoseconds t(0);      /* "current time" in nano-seconds */
     unsigned long range;  /* interval between two tuples is 0..range nsec */
     
@@ -44,6 +47,7 @@ void generate_data (master_ctx_t *ctx)
     	ctx->generate_tuples_R = ctx->num_tuples_R;
     } else {
     	ctx->generate_tuples_R = tuple_limit;
+    	assert(ctx->generate_tuples_R % 2 == 0);
 	std::cout << "# Generate data until tuple limit \n";
     }
     
@@ -51,6 +55,7 @@ void generate_data (master_ctx_t *ctx)
     	ctx->generate_tuples_S = ctx->num_tuples_S;
     } else {
     	ctx->generate_tuples_S = tuple_limit;
+    	assert(ctx->generate_tuples_S % 2 == 0);
 	std::cout << "# Generate data until tuple limit \n";
     }
 
@@ -84,7 +89,6 @@ void generate_data (master_ctx_t *ctx)
 	    }
     } else if (ctx->processing_mode == gpu_mode
 		    || ctx->processing_mode == atomic_mode){
-	    unsigned *i;
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.t_ns), (ctx->generate_tuples_R + 1) * sizeof (*ctx->R.t_ns),0));
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.x), (ctx->generate_tuples_R + 1) * sizeof (*ctx->R.x),0));
 	    CUDA_SAFE(cudaHostAlloc((void**)&(ctx->R.y), (ctx->generate_tuples_R + 1) * sizeof (*ctx->R.y),0));
@@ -140,8 +144,8 @@ void generate_data (master_ctx_t *ctx)
 	    {
 		t = get_current_ns(ctx,t);
 		ctx->S.t_ns[i] = t;
+		
 		int j = random () % ctx->int_value_range;
-
 		if (j % 2 == 0) {
 			ctx->S.a[i] = j / 2;
 			ctx->S.b[i] = j / 2;

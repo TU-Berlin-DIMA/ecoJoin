@@ -30,7 +30,7 @@
 #include "time.h"
 
 /* --- forward declarations --- */
-void init_worker (worker_ctx_t *w_ctx);
+void init_worker (worker_ctx_t *w_ctx, master_ctx_t *ctx);
 void process_s (master_ctx_t *ctx, worker_ctx_t *w_ctx);
 void process_r (master_ctx_t *ctx, worker_ctx_t *w_ctx);
 void process_s_cpu (worker_ctx_t *w_ctx, unsigned threads);
@@ -57,7 +57,7 @@ void start_batch(master_ctx_t *ctx, worker_ctx_t *w_ctx){
         w_ctx->r_batch_size = ctx->num_tuples_R;
         w_ctx->s_batch_size = ctx->num_tuples_S;
 
-	init_worker(w_ctx);
+	init_worker(w_ctx, ctx);
 
 	set_num_of_threads(w_ctx);
 
@@ -92,7 +92,7 @@ void start_batch(master_ctx_t *ctx, worker_ctx_t *w_ctx){
  */
 void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 
-	init_worker(w_ctx);
+	init_worker(w_ctx, ctx);
 
 	set_num_of_threads(w_ctx);
 
@@ -141,6 +141,7 @@ void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 
                 /* sleep until we the next tuple */
                 if (next_is_R) {
+
 			//std::cout << "Sleep time (ms): " <<  std::chrono::duration_cast<std::chrono::milliseconds>(
 			//		w_ctx->stats.start_time + ctx->R.t_ns[ctx->r_available+next_r] - timer.now()).count() << "\n";
                         //while(std::chrono::duration_cast<std::chrono::nanoseconds>(w_ctx->stats.start_time 
@@ -149,6 +150,7 @@ void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
                         std::this_thread::sleep_for(w_ctx->stats.start_time
                                         + r_get_tns(ctx,ctx->r_available+next_r) - timer.now());
 		} else {
+
 			//std::cout << "Sleep time (ms): " <<  std::chrono::duration_cast<std::chrono::milliseconds>(
 			//		w_ctx->stats.start_time + ctx->S.t_ns[ctx->s_available+next_s] - timer.now()).count() << "\n";
                         //while(std::chrono::duration_cast<std::chrono::nanoseconds>(w_ctx->stats.start_time 
@@ -305,7 +307,7 @@ void process_r (master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	w_ctx->stats.processed_input_tuples += w_ctx->r_batch_size;
 }
 
-void init_worker (worker_ctx_t *w_ctx){
+void init_worker (worker_ctx_t *w_ctx, master_ctx_t *ctx){
 	/* Allocate output buffer */
 	if (w_ctx->processing_mode == gpu_mode ||
 			w_ctx->processing_mode == atomic_mode){
@@ -324,7 +326,7 @@ void init_worker (worker_ctx_t *w_ctx){
 		w_ctx->processing_mode == ht_cpu2_mode ||
 		w_ctx->processing_mode == ht_cpu3_mode || 
 		w_ctx->processing_mode == ht_cpu4_mode) {
-		mt_atomic_chunk::init_ht();
+		mt_atomic_chunk::init(ctx);
 	}
 		
 }

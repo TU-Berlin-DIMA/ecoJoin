@@ -24,8 +24,8 @@ void print_statistics (statistics *stats, FILE *outfile, FILE *resultfile, maste
         fprintf (outfile, "# Throughput only Proc (16 Byte tuples)(MB/s): %f\n", 
 			((float)stats->processed_input_tuples*16/1048576/*MB*/)
 			/((float)stats->runtime_proc*ns));
-        fprintf (outfile, "# Average Latency (ns): %f\n", 
-			(float)stats->summed_latency.count()/(float)stats->processed_output_tuples);
+        fprintf (outfile, "# Average Latency (ns): %ld\n", 
+			stats->summed_latency.count()/stats->processed_output_tuples);
         fprintf (outfile, "# Runtime      (ns): %ld\n", stats->runtime);
         fprintf (outfile, "# Runtime Idle (ns): %ld\n", stats->runtime_idle);
         fprintf (outfile, "# Runtime Proc (ns): %ld\n", stats->runtime_proc);

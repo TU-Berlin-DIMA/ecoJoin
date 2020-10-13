@@ -58,7 +58,6 @@ int main(int argc, char **argv) {
 	int ch;
 
 	/* Setup Master */
-	ctx->result_queue = new_ringbuffer(MESSAGE_QUEUE_LENGTH,0);
 	ctx->outfile = stdout;
 	ctx->logfile = fopen ("/dev/null", "w");
 	ctx->resultfile = fopen ("/dev/null", "w");
