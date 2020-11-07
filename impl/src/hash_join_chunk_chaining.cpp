@@ -307,17 +307,11 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 #endif
 
 	/* Clean-up S HT */
-	//if (!to_delete_bitmap_S.none()) {
-	//if (to_delete_bitmap_S.count() > w_ctx->s_batch_size*.5) {
-	if (to_delete_bitmap_S.count() > 1) {
-	//if (to_delete_sum > cleanup_threshold) {
-		//cout << "delete\n";
+	if (to_delete_bitmap_S.count() > w_ctx->cleanup_threshold) {
 #pragma omp parallel for
 		for (size_t i = 0; i < ht_size; i++){
 			if (to_delete_bitmap_S.test(i)){
 				uint32_t tpl_cnt = hmS[i].counter.load(std::memory_order_relaxed);
-				//if (i == 3318)
-				//	cout << "B count " << tpl_cnt << " delete\n";
 				chunk_S *chunk = (chunk_S*) hmS[i].address; // head
 				for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
 					if ((chunk[j].t_ns.count() + w_ctx->window_size_S * n_sec)
@@ -336,8 +330,6 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 						hmS[i].counter--; // Update tpl counter
 					}
 				}
-				//if (i == 3318)
-				//	cout << "A count " << tpl_cnt << " delete\n";
 			}
 		}
 		to_delete_bitmap_S.reset();
@@ -486,11 +478,7 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 #endif
 
 	/* Clean-up R HT */
-	//if (!to_delete_bitmap_R.none()) {
-	//if (to_delete_bitmap_R.count() > w_ctx->r_batch_size*.5) {
-	if (to_delete_bitmap_R.count() > 1) {
-	//if (to_delete_sum > cleanup_threshold) {
-		//cout << "delete\n";
+	if (to_delete_bitmap_R.count() > w_ctx->cleanup_threshold) {
 #pragma omp parallel for
 		for (size_t i = 0; i < ht_size; i++){
 			if (to_delete_bitmap_R.test(i)){

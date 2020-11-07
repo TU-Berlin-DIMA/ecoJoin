@@ -166,6 +166,9 @@ struct master_ctx_t {
       
         /* process data in one batch instead of stream-wise */ 
         bool batch_mode;
+
+	/* Tuple Threshold for cleanup step */
+        unsigned cleanup_threshold;
 };
 typedef struct master_ctx_t master_ctx_t;
 

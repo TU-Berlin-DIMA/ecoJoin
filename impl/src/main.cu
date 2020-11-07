@@ -90,12 +90,16 @@ int main(int argc, char **argv) {
 	ctx->linear_data = false;
 	ctx->r_iterations = 1;
 	ctx->s_iterations = 1;
+	ctx->cleanup_threshold = 1;
 	
 	/* parse command lines */
-	while ((ch = getopt (argc, argv, "n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:f:F:ePzl")) != -1)
+	while ((ch = getopt (argc, argv, "c:n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:f:F:ePzl")) != -1)
 	{
 		switch (ch)
 		{
+			case 'c':
+				ctx->cleanup_threshold = strtol (optarg, NULL, 10);
+				break;
 			case 'n':
 				ctx->num_tuples_R = strtol (optarg, NULL, 10);
 				break;
@@ -281,6 +285,7 @@ int main(int argc, char **argv) {
 	w_ctx->stop_signal = 0;
 	w_ctx->stop_signal_ack = 0;
 	w_ctx->resultfile = ctx->resultfile;
+	w_ctx->cleanup_threshold = ctx->cleanup_threshold;
 		
 	/* Setup statistics*/
 	w_ctx->stats.processed_output_tuples = 0;
