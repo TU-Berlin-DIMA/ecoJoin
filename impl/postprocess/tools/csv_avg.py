@@ -14,7 +14,7 @@ with open('result.csv', 'w') as f_output:
                 csv_input = csv.reader(f_input, delimiter=' ')
                 
                 # ignore comments
-                for i in range(9):
+                for i in range(10):
                     next(csv_input)
                 
                 header = next(csv_input)
@@ -25,6 +25,6 @@ with open('result.csv', 'w') as f_output:
                         averages.append(sum(float(x) for x in col) / len(col))
                     except:
                         pass
-                print averages
+                print (averages)
 
             csv_output.writerow([filename] + averages)

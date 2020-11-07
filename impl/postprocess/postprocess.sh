@@ -10,6 +10,6 @@ then
 else
 	./tools/lastline_rem.sh $1
 	python ./tools/csv_avg.py $1/
-	python3 ./tools/gen_energy_plots.py $1
+	#python3 ./tools/gen_energy_plots.py $1
 	mv result.csv $1
 fi

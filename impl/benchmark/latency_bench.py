@@ -50,7 +50,8 @@ def ref_measure():
     time.sleep(15)
     socket.send(b"End Reference")
     message = socket.recv()
-    return float(str(message))
+    #return float(str(message))
+    return float(message)
 
 ####################################
 print("Start benchmark")
@@ -67,7 +68,7 @@ input_t = []
 refs = []
 
 # Reset Freqs
-subprocess.call(["/home/adi/efficient-gpu-joins/impl/benchmark/helper/reset_freqs.sh"], shell = True, preexec_fn=os.setsid)
+subprocess.call(["/home/adimon/efficient-gpu-joins/impl/benchmark/helper/reset_freqs.sh"], shell = True, preexec_fn=os.setsid)
 
 linenumber = 0
 for line in f:
