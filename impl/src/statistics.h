@@ -25,7 +25,6 @@ struct statistics {
     /* latency in ns of each tuple that was processed by the join*/
     std::chrono::nanoseconds summed_latency;
 
-
     /* overall runtime in ms */
     long runtime;
 
@@ -34,6 +33,11 @@ struct statistics {
 
     /* runtime in processing mode */
     long runtime_proc;
+
+    /* runtime in distribution */
+    long runtime_build;
+    long runtime_probe;
+    long runtime_cleanup;
 
     /* Number of switches to processing mode */
     unsigned switches_to_proc;

@@ -119,8 +119,11 @@ struct worker_ctx_t {
     /* Worker acks processing stop and finished statistics update */
     bool stop_signal_ack;
 
-    /** File to write the result tuples to  **/
+    /* File to write the result tuples to  */
     FILE *resultfile;
+
+    /* Tuple Threshold for cleanup step */
+    unsigned cleanup_threshold;
 };
 
 
