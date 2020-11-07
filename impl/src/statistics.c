@@ -29,6 +29,9 @@ void print_statistics (statistics *stats, FILE *outfile, FILE *resultfile, maste
         fprintf (outfile, "# Runtime      (ns): %ld\n", stats->runtime);
         fprintf (outfile, "# Runtime Idle (ns): %ld\n", stats->runtime_idle);
         fprintf (outfile, "# Runtime Proc (ns): %ld\n", stats->runtime_proc);
+        fprintf (outfile, "# Runtime Build (ns): %ld\n", stats->runtime_build);
+        fprintf (outfile, "# Runtime Probe (ns): %ld\n", stats->runtime_probe);
+        fprintf (outfile, "# Runtime Clean (ns): %ld\n", stats->runtime_cleanup);
         fprintf (outfile, "# Switches to Proc : %ld\n", stats->switches_to_proc);
         fprintf (outfile, "# Processed Input  : %ld\n", stats->processed_input_tuples);
 

@@ -13,8 +13,8 @@
 
 /* Limit for generated data, Tuples above the limit are not generated but simulated by
  * reloading again existing tuples */
-const size_t datasize_limit_mb = 16;
-//const size_t datasize_limit_mb = 256;
+//const size_t datasize_limit_mb = 16;
+const size_t datasize_limit_mb = 256;
 
 const unsigned long tuple_limit = datasize_limit_mb * 1024 * 1024 /*B*/ / 16;
 

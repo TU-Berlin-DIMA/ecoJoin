@@ -28,7 +28,7 @@ static unsigned ht_mask = 0;     /* set in init */
 static unsigned output_mask = 0; /* set in init */
 
 // Parameters HT Generation 
-static const double load_factor = 0.5;
+static const double load_factor = 0.2;
 static const int cleanup_threshold = 1;
 static const unsigned output_size = 2097152; /* 2^21 */
 
@@ -102,7 +102,7 @@ void init(master_ctx_t *ctx){
 	unsigned chunk_size = tpl_per_chunk * sizeof(chunk_R);
 	cout << "# The chunk size is " << chunk_size << " B\n";
 	cout << "# Total hash table size is " 
-		<< (long)ht_size * tpl_per_chunk * chunk_size / 1048576 /*MB*/ << " MB\n";
+		<< (long)ht_size * chunk_size / 1048576 /*MB*/ << " MB\n";
 
 	assert(ht_size != 0);
 	assert(ht_size % 2 == 0);
@@ -143,12 +143,11 @@ void init(master_ctx_t *ctx){
 /* Calculate Latency for statistic output
  * INFLUENCES MULTITHREADED PERFORMANCE SIGNIFICANTLY */
 inline
-void calc_latency (worker_ctx_t *w_ctx, chunk_S chunk, unsigned index)
+void calc_latency_s (master_ctx_t *ctx, worker_ctx_t *w_ctx, unsigned s)
 {
-	/* Choose the older tuple to calc the latency.
-	 * We can assume that the tuple in ht is always the older one */
+	/* Choose the older tuple to calc the latency */
         auto now = std::chrono::steady_clock::now();
-        auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) - chunk.t_ns);
+        auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) -  s_get_tns(ctx,s));
 	#pragma omp critical
 	{
 	w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>(w_ctx->stats.summed_latency + i);
@@ -162,12 +161,11 @@ void calc_latency (worker_ctx_t *w_ctx, chunk_S chunk, unsigned index)
 }
 
 inline
-void calc_latency (worker_ctx_t *w_ctx, chunk_R chunk, unsigned index)
+void calc_latency_r (master_ctx_t *ctx, worker_ctx_t *w_ctx, unsigned r)
 {
-	/* Choose the older tuple to calc the latency.
-	 * We can assume that the tuple in ht is always the older one */
+	/* Choose the older tuple to calc the latency */
         auto now = std::chrono::steady_clock::now();
-        auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) - chunk.t_ns);
+        auto i = (std::chrono::duration_cast <std::chrono::nanoseconds>(now -  w_ctx->stats.start_time) -  r_get_tns(ctx,r));
 	#pragma omp critical
 	{
 	w_ctx->stats.summed_latency = std::chrono::duration_cast <std::chrono::nanoseconds>(w_ctx->stats.summed_latency + i);
@@ -202,10 +200,12 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 		hash = (hash & ht_mask);
 		
 		uint32_t tpl_cntr = hmR[hash].counter.fetch_add(1,std::memory_order_relaxed);
+		//if (hash == 25)
+		//	cout << tpl_cntr << " insert count in R " << w_ctx->R.t_ns[r].count() << "\n";
 
 		if (tpl_cntr >= tpl_per_chunk) {
 			cout << hash << " " << tpl_cntr << "\n";
-			cout << "Chunk full at index: " << hash  << "\n";
+			cout << "Chunk full at index: " << hash  << " in R\n";
 			for (unsigned i = 0; i < tpl_cntr*2 ; i++) {
 				cout << ((chunk_R*)hmR[hash].address)[i].x << " "
 					<< ((chunk_R*)hmR[hash].address)[i].y << " "
@@ -221,9 +221,12 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			exit(1);
 		}
 
+		if (tpl_cntr >= tpl_per_chunk * 0.5)
+			to_delete_bitmap_R[hash] = 1;
+
 		((chunk_R*)hmR[hash].address)[tpl_cntr].x = k; // key
 		((chunk_R*)hmR[hash].address)[tpl_cntr].y = w_ctx->R.y[r]; // value
-		((chunk_R*)hmR[hash].address)[tpl_cntr].t_ns = w_ctx->R.t_ns[r]; // ts
+		((chunk_R*)hmR[hash].address)[tpl_cntr].t_ns = r_get_tns(ctx,r); // ts
 		((chunk_R*)hmR[hash].address)[tpl_cntr].r = r; // index
         }
 
@@ -231,8 +234,7 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 #ifdef DEBUG
 	auto end_time = timer.now();
 	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-        cout << "Build R " <<
-		std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
+	w_ctx->stats.runtime_build += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
 	start_time = timer.now();
 #endif
 
@@ -267,7 +269,7 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 						unsigned s = chunk[j].s;
 						out_tuples.push_back(tuple<uint32_t, uint32_t>(r,s));
 						emitted_tuples++;
-						calc_latency(w_ctx, *chunk, j);
+						calc_latency_r(ctx ,w_ctx, r);
 					}
 				} else { // Invalid
 					to_delete_bitmap_S[hash] = 1;
@@ -300,17 +302,22 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 #ifdef DEBUG
 	end_time = timer.now();
 	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-        cout << "Probe S "
-		<< std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
+	w_ctx->stats.runtime_probe += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
 	start_time = timer.now();
 #endif
 
 	/* Clean-up S HT */
-	if (to_delete_sum > cleanup_threshold) {
+	//if (!to_delete_bitmap_S.none()) {
+	//if (to_delete_bitmap_S.count() > w_ctx->s_batch_size*.5) {
+	if (to_delete_bitmap_S.count() > 1) {
+	//if (to_delete_sum > cleanup_threshold) {
+		//cout << "delete\n";
 #pragma omp parallel for
 		for (size_t i = 0; i < ht_size; i++){
 			if (to_delete_bitmap_S.test(i)){
 				uint32_t tpl_cnt = hmS[i].counter.load(std::memory_order_relaxed);
+				//if (i == 3318)
+				//	cout << "B count " << tpl_cnt << " delete\n";
 				chunk_S *chunk = (chunk_S*) hmS[i].address; // head
 				for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
 					if ((chunk[j].t_ns.count() + w_ctx->window_size_S * n_sec)
@@ -329,6 +336,8 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 						hmS[i].counter--; // Update tpl counter
 					}
 				}
+				//if (i == 3318)
+				//	cout << "A count " << tpl_cnt << " delete\n";
 			}
 		}
 		to_delete_bitmap_S.reset();
@@ -337,8 +346,7 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 #ifdef DEBUG
 	end_time = timer.now();
 	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-        cout << "Clean up S " << 
-		std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
+	w_ctx->stats.runtime_cleanup += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
 #else
 	auto end_time = timer.now();
 	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
@@ -367,10 +375,13 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 		hash = (hash & ht_mask);
 		
 		uint32_t tpl_cntr = hmS[hash].counter.fetch_add(1,std::memory_order_relaxed);
+		//if (hash == 25)
+		//	cout << tpl_cntr << " insert count in S " << w_ctx->S.t_ns[s].count() 
+		//		<< " k: " << k << "hash: " << hash <<" \n";
 
 		if (tpl_cntr >= tpl_per_chunk) {
 			cout << hash << " " << tpl_cntr << "\n";
-			cout << "Chunk full at index: " << hash  << "\n";
+			cout << "Chunk full at index: " << hash  << " in S\n";
 			for (int i = 0; i < tpl_cntr*2 ; i++) {
 				cout << ((chunk_S*)hmS[hash].address)[i].a << " "
 					<< ((chunk_S*)hmS[hash].address)[i].b << " "
@@ -387,18 +398,21 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			exit(1);
 		}
 		
+		if (tpl_cntr >= tpl_per_chunk * 0.5) 
+			to_delete_bitmap_S[hash] = 1;
+		
+		
 		((chunk_S*)hmS[hash].address)[tpl_cntr].a = k; // key
 		((chunk_S*)hmS[hash].address)[tpl_cntr].b = w_ctx->S.b[s]; // value
-		((chunk_S*)hmS[hash].address)[tpl_cntr].t_ns = w_ctx->S.t_ns[s]; // ts
+		((chunk_S*)hmS[hash].address)[tpl_cntr].t_ns = s_get_tns(ctx,s); // ts
 		((chunk_S*)hmS[hash].address)[tpl_cntr].s = s; // index
         }
 
 
 #ifdef DEBUG
 	auto end_time = timer.now();
-        cout << "Build S "
-		<< std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
 	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+	w_ctx->stats.runtime_build += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
 	start_time = timer.now();
 #endif
 
@@ -435,7 +449,7 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 						unsigned r = chunk[j].r;
 						out_tuples.push_back(tuple<uint32_t, uint32_t>(r,s));
 						emitted_tuples++;
-						calc_latency(w_ctx, *chunk, j);
+						calc_latency_s(ctx, w_ctx, s);
 					} 
 				} else { // Invalid
 					to_delete_bitmap_R[hash] = 1;
@@ -466,15 +480,17 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 
 #ifdef DEBUG
 	end_time = timer.now();
-        cout << "Probe R " << 
-		std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
 	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+	w_ctx->stats.runtime_probe += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
 	start_time = timer.now();
 #endif
 
 	/* Clean-up R HT */
-	//if (!to_delete_bitmap.none()) {
-	if (to_delete_sum > cleanup_threshold) {
+	//if (!to_delete_bitmap_R.none()) {
+	//if (to_delete_bitmap_R.count() > w_ctx->r_batch_size*.5) {
+	if (to_delete_bitmap_R.count() > 1) {
+	//if (to_delete_sum > cleanup_threshold) {
+		//cout << "delete\n";
 #pragma omp parallel for
 		for (size_t i = 0; i < ht_size; i++){
 			if (to_delete_bitmap_R.test(i)){
@@ -505,8 +521,7 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 #ifdef DEBUG
 	end_time = timer.now();
 	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-        cout << "Clean up R " << 
-		std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() << "\n";
+	w_ctx->stats.runtime_cleanup += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
 #else
 	auto end_time = timer.now();
 	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();

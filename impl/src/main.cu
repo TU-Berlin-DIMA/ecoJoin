@@ -316,6 +316,7 @@ int main(int argc, char **argv) {
 		fprintf (ctx->outfile, "# Use CPU 3 hash join processing mode\n\n");
 	else if (ctx->processing_mode == ht_cpu4_mode)
 		fprintf (ctx->outfile, "# Use CPU 4 hash join processing mode\n\n");
+	
 
 	if (ctx->range_predicate)
 		fprintf (ctx->outfile, "# Use range predicate\n\n");
@@ -325,7 +326,6 @@ int main(int argc, char **argv) {
 	if (ctx->batch_mode) {
 		fprintf (ctx->outfile, "# Process in one batch\n");
 		start_batch(ctx, w_ctx);
-
 	} else {
 		fprintf (ctx->outfile, "# Start stream\n");
 		start_stream(ctx, w_ctx);

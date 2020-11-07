@@ -211,8 +211,8 @@ void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx){
         w_ctx->stats.runtime = std::chrono::duration_cast
                         <std::chrono::nanoseconds>(w_ctx->stats.end_time - w_ctx->stats.start_time).count();;
 
-        print_statistics(&(w_ctx->stats), ctx->outfile, ctx->logfile, ctx);
-        write_histogram_stats(&(w_ctx->stats), "output_tuple_stats.csv");
+        print_statistics(&(w_ctx->stats), ctx->outfile, ctx->resultfile, ctx);
+        //write_histogram_stats(&(w_ctx->stats), "output_tuple_stats.csv");
         //mt_atomic_chunk::print_ht(w_ctx);
 
         exit(0);

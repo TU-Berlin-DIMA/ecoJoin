@@ -176,7 +176,7 @@ std::chrono::nanoseconds r_get_tns(master_ctx_t *ctx, unsigned r){
 		//std::cout << (std::chrono::nanoseconds((ctx->r_iterations-1) * ctx->generate_tuples_R * (long)(1.e9 / ctx->rate_R))).count() << "\n";
 		//std::cout << (ctx->R.t_ns[r % ctx->generate_tuples_R]
 	//		+ std::chrono::nanoseconds((ctx->r_iterations-1) * ctx->generate_tuples_R * (long)(1.e9 / ctx->rate_R))).count() << "\n";
-		return ctx->R.t_ns[r & ctx->generate_tuples_R] 
+		return ctx->R.t_ns[r & (ctx->generate_tuples_R-1)] 
 			+ std::chrono::nanoseconds((ctx->r_iterations-1) * ctx->generate_tuples_R * (long)(1.e9 / ctx->rate_R));
 	} else {
 		return ctx->R.t_ns[r];
@@ -186,7 +186,7 @@ std::chrono::nanoseconds r_get_tns(master_ctx_t *ctx, unsigned r){
 inline
 std::chrono::nanoseconds s_get_tns(master_ctx_t *ctx, unsigned s){
 	if (ctx->s_iterations > 1) {
-		return ctx->S.t_ns[s & ctx->generate_tuples_S] 
+		return ctx->S.t_ns[s & (ctx->generate_tuples_S-1)]
 			+ std::chrono::nanoseconds((ctx->s_iterations-1) * ctx->generate_tuples_S * (long)(1.e9 / ctx->rate_S));
 	} else {
 		return ctx->S.t_ns[s];
