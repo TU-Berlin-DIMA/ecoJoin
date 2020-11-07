@@ -1,0 +1,16 @@
+-c 4 -n 3840 -N 3840 -w 10 -W 10 -R 32 -r 32 -o bench.csv
+-c 4 -n 7680 -N 7680 -w 10 -W 10 -R 64 -r 64 -o bench.csv
+-c 4 -n 15360 -N 15360 -w 10 -W 10 -R 128 -r 128 -o bench.csv
+-c 4 -n 30720 -N 30720 -w 10 -W 10 -R 256 -r 256 -o bench.csv
+-c 4 -n 61440 -N 61440 -w 10 -W 10 -R 512 -r 512 -o bench.csv
+-c 4 -n 122880 -N 122880 -w 10 -W 10 -R 1024 -r 1024 -o bench.csv
+-c 4 -n 245760 -N 245760 -w 10 -W 10 -R 2048 -r 2048 -o bench.csv
+-c 4 -n 491520 -N 491520 -w 10 -W 10 -R 4096 -r 4096 -o bench.csv
+-c 4 -n 983040 -N 983040 -w 10 -W 10 -R 8192 -r 8192 -o bench.csv
+-c 4 -n 1966080 -N 1966080 -w 10 -W 10 -R 16384 -r 16384 -o bench.csv
+-c 4 -n 3932160 -N 3932160 -w 10 -W 10 -R 32768 -r 32768 -o bench.csv
+-c 4 -n 7864320 -N 7864320 -w 10 -W 10 -R 65536 -r 65536 -o bench.csv
+-c 4 -n 15728640 -N 15728640 -w 10 -W 10 -R 131072 -r 131072 -o bench.csv
+-c 4 -n 31457280 -N 31457280 -w 10 -W 10 -R 262144 -r 262144 -o bench.csv
+-c 4 -n 62914560 -N 62914560 -w 10 -W 10 -R 524288 -r 524288 -o bench.csv
+-c 4 -n 125829120 -N 125829120 -w 10 -W 10 -R 1048576 -r 1048576 -o bench.csv
