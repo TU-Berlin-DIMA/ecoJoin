@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <time.h>
 
-#include "ringbuffer.h"
 #include "data.h"
 #include "messages.h"
 #include "master.h"

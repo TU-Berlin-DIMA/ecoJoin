@@ -6,7 +6,6 @@
 #include <iostream>
 #include <condition_variable>
 
-#include "ringbuffer.h"
 #include "data.h"
 
 enum processing_mode_e{
@@ -31,15 +30,6 @@ enum frequency_mode_e {
 };
 
 struct master_ctx_t {
-
-	/** This queue handles the imput data of the R stream **/
-	ringbuffer_t *data_R_queue;
-
-	/** This queue handles the imput data of the S stream **/
-	ringbuffer_t *data_S_queue;
-
-	/** Result tuples are stored in this queue **/
-	ringbuffer_t *result_queue;
 
 	/** data rate  of the R stream **/
 	unsigned rate_R;

@@ -4,8 +4,6 @@
 
 #include "parameter.h"
 
-#include "messages.h"
-#include "ringbuffer.h"
 #include "data.h"
 #include "time.h"
 #include "master.h"

@@ -16,8 +16,6 @@
 
 #include "data.h"
 #include "master.h"
-#include "ringbuffer.h"
-#include "messages.h"
 #include "worker.h"
 #include "cuda_helper.h"
 #include "dvs.h"
