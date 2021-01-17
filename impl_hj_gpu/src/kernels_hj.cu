@@ -157,15 +157,15 @@ void compare_kernel_new_s_hj(
 					}
 				} else { // Invalid
 					set_bit(hash, cleanup_bitmap_R);
-					//atomicAdd(invalid_count_out, 1);
+					atomicAdd(invalid_count_out, 1);
 					//invalid_count_out[0]++;
-					invalid_count++;
+					//invalid_count++;
 				}
 			}
 		} 
 	}
 
-	sdata[tid] = invalid_count;
+	/*sdata[tid] = invalid_count;
 	__syncthreads();
 	// do reduction in shared mem
 	for(unsigned int s=1; s < blockDim.x; s *= 2) { 
@@ -176,7 +176,7 @@ void compare_kernel_new_s_hj(
 	}
 	// write result for this block to global mem
 	if (tid == 0) 
-		invalid_count_out[blockIdx.x] = sdata[0];
+		invalid_count_out[blockIdx.x] = sdata[0];*/
 }
 
 /*
@@ -304,15 +304,15 @@ void compare_kernel_new_r_hj(
 					}
 				} else { // Invalid
 					set_bit(hash, cleanup_bitmap_S);
-					//atomicAdd(invalid_count_out, 1);
+					atomicAdd(invalid_count_out, 1);
 					//invalid_count_out[0]++;
-					invalid_count++;
+					//invalid_count++;
 				}
 			}
 		}
 	}
 
-	sdata[tid] = invalid_count;
+	/*sdata[tid] = invalid_count;
 	__syncthreads();
 	// do reduction in shared mem
 	for(unsigned int s=1; s < blockDim.x; s *= 2) { 
@@ -323,7 +323,7 @@ void compare_kernel_new_r_hj(
 	}
 	// write result for this block to global mem
 	if (tid == 0) 
-		invalid_count_out[blockIdx.x] = sdata[0];
+		invalid_count_out[blockIdx.x] = sdata[0];*/
 		
 }
 

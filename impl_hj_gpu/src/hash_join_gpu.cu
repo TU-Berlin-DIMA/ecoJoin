@@ -146,8 +146,8 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	Timer::Timer timer = Timer::Timer();
 	auto start_time = timer.now();
 
-	compare_kernel_new_r_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize, w_ctx->gpu_blocksize * sizeof(int)>>>(
-	//compare_kernel_new_r_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(
+	//compare_kernel_new_r_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize, w_ctx->gpu_blocksize * sizeof(int)>>>(
+	compare_kernel_new_r_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(
                 *(w_ctx->r_processed),
                 output, output_buffersize,
                 w_ctx->S.a, w_ctx->S.b, w_ctx->R.x, w_ctx->R.y,
@@ -164,13 +164,13 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 
 	CUDA_SAFE(cudaDeviceSynchronize())
 	
-	//int sum = invalid_count_out[0];
+	int sum = invalid_count_out[0];
 
-	int sum = 0;
+	/*int sum = 0;
 	#pragma omp parallel for
 	for (int i = 0; i < w_ctx->gpu_blocksize; i++){
 		sum += invalid_count_out[i];
-	}
+	}*/
 
 
 	if (sum > ctx->cleanup_threshold) {
@@ -213,8 +213,8 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	Timer::Timer timer = Timer::Timer();
 	auto start_time = timer.now();
 
-	compare_kernel_new_s_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize, w_ctx->gpu_blocksize * sizeof(int)>>>(
-	//compare_kernel_new_s_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(
+	//compare_kernel_new_s_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize, w_ctx->gpu_blocksize * sizeof(int)>>>(
+	compare_kernel_new_s_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(
                 *(w_ctx->s_processed),
                 output, output_buffersize,
                 w_ctx->S.a, w_ctx->S.b, w_ctx->R.x, w_ctx->R.y,
@@ -231,12 +231,12 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 
 	CUDA_SAFE(cudaDeviceSynchronize())
 
-	int sum = 0;
+	/*int sum = 0;
 	#pragma omp parallel for
 	for (int i = 0; i < w_ctx->gpu_blocksize; i++){
 		sum += invalid_count_out[i];
-	}
-	//int sum = invalid_count_out[0];
+	}*/
+	int sum = invalid_count_out[0];
 	
 	if (sum > ctx->cleanup_threshold) {
 		auto end_time = timer.now();
