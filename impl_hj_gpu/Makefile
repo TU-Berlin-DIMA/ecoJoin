@@ -13,9 +13,9 @@ CFLAGS   = -std=c++11 -I. -g -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -
 LFLAGS   = -gencode arch=compute_53,code=sm_53 -lcpufreq -lgomp -ltbb 
 
 
-NVCC     = /usr/local/cuda/bin/nvcc
+NVCC     ?= /usr/local/cuda/bin/nvcc
 CC       = g++
-LINKER   = /usr/local/cuda/bin/nvcc
+LINKER   ?= /usr/local/cuda/bin/nvcc
 
 SRCDIR   = src
 OBJDIR   = obj
