@@ -13,6 +13,7 @@ __device__ inline
 int boffset(int b) { return b % (sizeof(unsigned)*8); }
 //int boffset(int b) { return b >> 5; }
 
+// FIXME: atomicOr ???
 __device__ inline
 void set_bit(int b, unsigned *array) { 
     array[bindex(b)] |= (1 << boffset(b));
@@ -96,49 +97,62 @@ void compare_kernel_new_s_hj(
 		int count, int* output_location,
 		int *invalid_count_out) {
 	unsigned int tid = threadIdx.x;
-	const size_t idx = threadIdx.x + blockIdx.x * blockDim.x;
-	const long global_threads = blockDim.x * gridDim.x;
+	/* const size_t idx = threadIdx.x + blockIdx.x * blockDim.x; */
+	/* const long global_threads = blockDim.x * gridDim.x; */
+
+    const int lane_id = threadIdx.x % warpSize;
+    constexpr int leader_id = 0;
+    const int warp_id = threadIdx.x / warpSize;
+    const int num_warps = blockDim.x / warpSize;
+    constexpr uint32_t warp_mask = 0xFFFFFFFFu;
+
+    const int global_warp_id = blockIdx.x * num_warps + warp_id;
+    const int global_warps = gridDim.x * num_warps;
 
 	int invalid_count = 0;
 	//if (idx == 0)
 	//	invalid_count_out[0] = 0;
 	extern __shared__ int sdata[];
-        for (int s = idx + s_processed; s < count + s_processed; s += global_threads){
+        for (int s = global_warp_id + s_processed; s < count + s_processed; s += global_warps){
 
 		const int k = a[s];
 		//printf("add s: %d %d %d\n",k, s_processed, ht_size_s);
 
-		/* 
-		 * Build
-		 */
-		int hash;
+        // FIXME: parallelize with warp
+        int hash = 0;
+        if (lane_id == leader_id) {
+            /* 
+             * Build
+             */
 
-		/* get hash */
-		MurmurHash_x86_32((void*)&k, sizeof(int), 0, &hash);
+            /* get hash */
+            MurmurHash_x86_32((void*)&k, sizeof(int), 0, &hash);
 
-		hash = hash & (ht_size_s-1);
-		int tpl_cntr = atomicAdd(&(hmS[hash].counter), 1);
-		
-		if (tpl_cntr >= 64) {
-			printf("Chunk full at index: %d in S, hash: %d, s: %d \n", tpl_cntr, hash, s);
-			__threadfence();
-			assert(0);
-		}
+            hash = hash & (ht_size_s-1);
+            int tpl_cntr = atomicAdd(&(hmS[hash].counter), 1);
+            
+            if (tpl_cntr >= 64) {
+                printf("Chunk full at index: %d in S, hash: %d, s: %d \n", tpl_cntr, hash, s);
+                __threadfence();
+                assert(0);
+            }
 
-		chunk_S *chunk = (chunk_S*) hmS[hash].address;
-		chunk[tpl_cntr].a = k;
-		chunk[tpl_cntr].t_ns = s_get_tns(generate_tuples_S, s_iterations, s_rate, s, s_ts);
-		chunk[tpl_cntr].b = b[s];
-		chunk[tpl_cntr].s = s;
+            chunk_S *chunk = (chunk_S*) hmS[hash].address;
+            chunk[tpl_cntr].a = k;
+            chunk[tpl_cntr].t_ns = s_get_tns(generate_tuples_S, s_iterations, s_rate, s, s_ts);
+            chunk[tpl_cntr].b = b[s];
+            chunk[tpl_cntr].s = s;
+        }
 
 		/* 
 		 * Probe
 		 */
-		tpl_cntr = hmR[hash].counter;
+		hash = __shfl_sync(warp_mask, hash, leader_id);
+		int tpl_cntr = hmR[hash].counter;
 
 		if (tpl_cntr != 0){
 			const chunk_R *chunk = (chunk_R*) hmR[hash].address; // head
-			for (int j = 0; j < tpl_cntr; j++){
+			for (int j = lane_id; j < tpl_cntr; j += warpSize){
 				/*if (hash == 203630) {
 					printf("%ld %ld\n", (chunk[j].t_ns + window_size_R * n_sec),
 							s_get_tns(generate_tuples_S, s_iterations, s_rate, s, s_ts));
@@ -246,50 +260,63 @@ void compare_kernel_new_r_hj(
 		int count, int* output_location,
 		int *invalid_count_out) {
 	unsigned int tid = threadIdx.x;
-	const size_t idx = threadIdx.x + blockIdx.x * blockDim.x;
-	const long global_threads = blockDim.x * gridDim.x;
+	/* const size_t idx = threadIdx.x + blockIdx.x * blockDim.x; */
+	/* const long global_threads = blockDim.x * gridDim.x; */
+
+    const int lane_id = threadIdx.x % warpSize;
+    constexpr int leader_id = 0;
+    const int warp_id = threadIdx.x / warpSize;
+    const int num_warps = blockDim.x / warpSize;
+    constexpr uint32_t warp_mask = 0xFFFFFFFFu;
+
+    const int global_warp_id = blockIdx.x * num_warps + warp_id;
+    const int global_warps = gridDim.x * num_warps;
 
 	//if (idx == 0)
 	//	invalid_count_out[0] = 0;
 
 	int invalid_count = 0;
 	extern __shared__ int sdata[];
-	for (int r = idx + r_processed; r < count + r_processed; r += global_threads){
+	for (int r = global_warp_id + r_processed; r < count + r_processed; r += global_warps){
 
 		const int k = x[r];
 
-		/* 
-		 * Build
-		 */ 
-		int hash;
+        // FIXME: parallelize with warp
+        int hash = 0;
+        if (lane_id == leader_id) {
+            /* 
+             * Build
+             */ 
 
-		/* get hash */
-		MurmurHash_x86_32((void*)&k, sizeof(int), 0, &hash);
+            /* get hash */
+            MurmurHash_x86_32((void*)&k, sizeof(int), 0, &hash);
 
-		hash = hash & (ht_size_r-1);
-		int tpl_cntr = atomicAdd(&(hmR[hash].counter), 1);
-		
-		if (tpl_cntr >= 64) {
-			printf("%d\n", window_size_R);
-			printf("Chunk full at index: %d in R, hash: %d, r: %d\n", tpl_cntr, hash, r);
-			__threadfence();
-			assert(0);
-		}
+            hash = hash & (ht_size_r-1);
+            int tpl_cntr = atomicAdd(&(hmR[hash].counter), 1);
+            
+            if (tpl_cntr >= 64) {
+                printf("%d\n", window_size_R);
+                printf("Chunk full at index: %d in R, hash: %d, r: %d\n", tpl_cntr, hash, r);
+                __threadfence();
+                assert(0);
+            }
 
-		chunk_R *chunk = (chunk_R*) hmR[hash].address;
-		chunk[tpl_cntr].x = k;
-		chunk[tpl_cntr].t_ns = r_get_tns(generate_tuples_R, r_iterations, r_rate, r, r_ts);
-		chunk[tpl_cntr].y = y[r];
-		chunk[tpl_cntr].r = r;
+            chunk_R *chunk = (chunk_R*) hmR[hash].address;
+            chunk[tpl_cntr].x = k;
+            chunk[tpl_cntr].t_ns = r_get_tns(generate_tuples_R, r_iterations, r_rate, r, r_ts);
+            chunk[tpl_cntr].y = y[r];
+            chunk[tpl_cntr].r = r;
+        }
 
 		/* 
 		 * Probe
 		 */
-		tpl_cntr = hmS[hash].counter;
+		hash = __shfl_sync(warp_mask, hash, leader_id);
+        int tpl_cntr = hmS[hash].counter;
 
 		if (tpl_cntr != 0){
 			const chunk_S *chunk = (chunk_S*) hmS[hash].address; // head
-			for (int j = 0; j < tpl_cntr; j++){
+			for (int j = lane_id; j < tpl_cntr; j += warpSize){
 				if ((chunk[j].t_ns + window_size_S * n_sec)
 						> r_get_tns(generate_tuples_R, r_iterations, r_rate, r, r_ts)) { // Valid
 					if (chunk[j].a == k) { // match
