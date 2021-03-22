@@ -96,7 +96,7 @@ void compare_kernel_new_s_hj(
 		int ht_size_r, int ht_size_s,
 		int count, int* output_location,
 		int *invalid_count_out) {
-	unsigned int tid = threadIdx.x;
+	/* unsigned int tid = threadIdx.x; */
 	/* const size_t idx = threadIdx.x + blockIdx.x * blockDim.x; */
 	/* const long global_threads = blockDim.x * gridDim.x; */
 
@@ -109,7 +109,6 @@ void compare_kernel_new_s_hj(
     const int global_warp_id = blockIdx.x * num_warps + warp_id;
     const int global_warps = gridDim.x * num_warps;
 
-	int invalid_count = 0;
 	//if (idx == 0)
 	//	invalid_count_out[0] = 0;
 	extern __shared__ int sdata[];
@@ -259,7 +258,7 @@ void compare_kernel_new_r_hj(
 		int ht_size_r, int ht_size_s,
 		int count, int* output_location,
 		int *invalid_count_out) {
-	unsigned int tid = threadIdx.x;
+	/* unsigned int tid = threadIdx.x; */
 	/* const size_t idx = threadIdx.x + blockIdx.x * blockDim.x; */
 	/* const long global_threads = blockDim.x * gridDim.x; */
 
@@ -275,7 +274,6 @@ void compare_kernel_new_r_hj(
 	//if (idx == 0)
 	//	invalid_count_out[0] = 0;
 
-	int invalid_count = 0;
 	extern __shared__ int sdata[];
 	for (int r = global_warp_id + r_processed; r < count + r_processed; r += global_warps){
 
