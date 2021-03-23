@@ -17,7 +17,7 @@ using namespace std;
 namespace hj_gpu {
 
 // Constants & Setup vars
-static const int tpl_per_chunk  = 64;
+//static const int tpl_per_chunk  = 64;
 
 static unsigned ht_size = 0;     /* set in init */
 static unsigned ht_mask = 0;     /* set in init */
@@ -82,16 +82,16 @@ void init(master_ctx_t *ctx){
 	unsigned tpl_per_window = ctx->window_size_R * ctx->rate_R;
 	cout << "# Expected number of tuples per window: " <<  tpl_per_window << "\n";
 
-	ht_size = next_largest_power2(tpl_per_window / tpl_per_chunk);
-	if (ht_size < (tpl_per_window / tpl_per_chunk) / load_factor){
+	ht_size = next_largest_power2(tpl_per_window / ctx->tpl_per_chunk);
+	if (ht_size < (tpl_per_window / ctx->tpl_per_chunk) / load_factor){
 	       	ht_size = ht_size << 1;
 	       	//ht_size = ht_size << 2;
 	}
 	ht_mask = ht_size - 1;
 
-	cout << "# Use a hash table size of " << ht_size << " chunks with " << tpl_per_chunk << " tuples\n";
+	cout << "# Use a hash table size of " << ht_size << " chunks with " << ctx->tpl_per_chunk << " tuples\n";
 	
-	unsigned chunk_size = tpl_per_chunk * sizeof(chunk_R);
+	unsigned chunk_size = ctx->tpl_per_chunk * sizeof(chunk_R);
 	cout << "# The chunk size is " << chunk_size << " B\n";
 	cout << "# Total hash table size is " 
 		<< (long)ht_size * chunk_size / 1048576 /*MB*/ << " MB\n";
@@ -100,18 +100,23 @@ void init(master_ctx_t *ctx){
 	assert(ht_size % 2 == 0);
 	assert(ht_mask != 0);
 
-	CUDA_SAFE(cudaHostAlloc(&hmR, ht_size*sizeof(ht), 0))
-	CUDA_SAFE(cudaHostAlloc(&hmS, ht_size*sizeof(ht), 0))
-	
+	//CUDA_SAFE(cudaMalloc(&hmR, ht_size*sizeof(ht)))
+	//CUDA_SAFE(cudaMalloc(&hmS, ht_size*sizeof(ht)))
+
+	CUDA_SAFE(cudaHostAlloc(&hmR, ht_size*sizeof(ht),0))
+	CUDA_SAFE(cudaHostAlloc(&hmS, ht_size*sizeof(ht),0))
+
 	for (unsigned i = 0; i < ht_size; i++){
 		chunk_R *chunk;
-		CUDA_SAFE(cudaHostAlloc(&chunk, chunk_size, 0))
+		//CUDA_SAFE(cudaMalloc(&chunk, chunk_size))
+		CUDA_SAFE(cudaHostAlloc(&chunk, chunk_size,0))
 		hmR[i].address = (uint64_t)chunk;
 		hmR[i].counter = 0;
 	}
 	for (unsigned i = 0; i < ht_size; i++){
 		chunk_S *chunk;
-		CUDA_SAFE(cudaHostAlloc(&chunk, chunk_size, 0))
+		//CUDA_SAFE(cudaMalloc(&chunk, chunk_size))
+		CUDA_SAFE(cudaHostAlloc(&chunk, chunk_size,0))
 		hmS[i].address = (uint64_t)chunk;
 		hmS[i].counter = 0;
 	}
@@ -134,11 +139,11 @@ void init(master_ctx_t *ctx){
 	// Cleanup Bitmap
 	cleanup_size = ht_size * sizeof(unsigned);
 
-	CUDA_SAFE(cudaHostAlloc(&cleanup_bitmap_S, cleanup_size, 0))
-	memset(cleanup_bitmap_S,0,cleanup_size);
+	CUDA_SAFE(cudaMalloc(&cleanup_bitmap_S, cleanup_size))
+	CUDA_SAFE(cudaMemset(cleanup_bitmap_S,0,cleanup_size))
 
-	CUDA_SAFE(cudaHostAlloc(&cleanup_bitmap_R, cleanup_size, 0))
-	memset(cleanup_bitmap_R,0,cleanup_size);
+	CUDA_SAFE(cudaMalloc(&cleanup_bitmap_R, cleanup_size))
+	CUDA_SAFE(cudaMemset(cleanup_bitmap_R,0,cleanup_size))
 }
 
 void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
@@ -146,10 +151,10 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	Timer::Timer timer = Timer::Timer();
 	auto start_time = timer.now();
 
-	//compare_kernel_new_r_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize, w_ctx->gpu_blocksize * sizeof(int)>>>(
-	compare_kernel_new_r_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(
+	compare_kernel_new_r_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize, w_ctx->gpu_blocksize * sizeof(int)>>>(
+	//compare_kernel_new_r_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(
                 *(w_ctx->r_processed),
-                output, output_buffersize,
+                output, output_size/2,
                 w_ctx->S.a, w_ctx->S.b, w_ctx->R.x, w_ctx->R.y,
                 w_ctx->S.t_ns, w_ctx->R.t_ns,
                 ctx->generate_tuples_S, ctx->generate_tuples_R,
@@ -160,18 +165,12 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
                 cleanup_bitmap_S, cleanup_bitmap_R,
                 ht_size, ht_size,
                 ctx->r_batch_size, output_location,
-                invalid_count_out);
+                invalid_count_out,
+		ctx->tpl_per_chunk);
 
 	CUDA_SAFE(cudaDeviceSynchronize())
 	
 	int sum = invalid_count_out[0];
-
-	/*int sum = 0;
-	#pragma omp parallel for
-	for (int i = 0; i < w_ctx->gpu_blocksize; i++){
-		sum += invalid_count_out[i];
-	}*/
-
 
 	if (sum > ctx->cleanup_threshold) {
 		auto end_time = timer.now();
@@ -181,7 +180,7 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 
 		cleanup_s<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(
                 	*(w_ctx->r_processed),
-			output, output_buffersize,
+			output, output_size/2,
 			w_ctx->S.a, w_ctx->S.b, w_ctx->R.x, w_ctx->R.y,
                 	w_ctx->S.t_ns, w_ctx->R.t_ns,
 			ctx->generate_tuples_S, ctx->generate_tuples_R,
@@ -192,7 +191,7 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			cleanup_bitmap_S, cleanup_bitmap_R,
 			ht_size);
 		CUDA_SAFE(cudaDeviceSynchronize())
-		memset(cleanup_bitmap_S,0,cleanup_size);
+		CUDA_SAFE(cudaMemset(cleanup_bitmap_S,0,cleanup_size))
 
 		end_time = timer.now();
 		w_ctx->stats.runtime_cleanup += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
@@ -204,8 +203,6 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	}
 
 	*(w_ctx->r_processed) += ctx->r_batch_size;
-
-
 }
 
 void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
@@ -213,10 +210,10 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 	Timer::Timer timer = Timer::Timer();
 	auto start_time = timer.now();
 
-	//compare_kernel_new_s_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize, w_ctx->gpu_blocksize * sizeof(int)>>>(
-	compare_kernel_new_s_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(
+	compare_kernel_new_s_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize, w_ctx->gpu_blocksize * sizeof(int)>>>(
+	//compare_kernel_new_s_hj<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(
                 *(w_ctx->s_processed),
-                output, output_buffersize,
+                output, output_size/2,
                 w_ctx->S.a, w_ctx->S.b, w_ctx->R.x, w_ctx->R.y,
                 w_ctx->S.t_ns, w_ctx->R.t_ns,
                 ctx->generate_tuples_S, ctx->generate_tuples_R,
@@ -227,15 +224,11 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
                 cleanup_bitmap_S, cleanup_bitmap_R,
                 ht_size, ht_size,
                 ctx->s_batch_size, output_location,
-                invalid_count_out);
+                invalid_count_out,
+		ctx->tpl_per_chunk);
 
 	CUDA_SAFE(cudaDeviceSynchronize())
 
-	/*int sum = 0;
-	#pragma omp parallel for
-	for (int i = 0; i < w_ctx->gpu_blocksize; i++){
-		sum += invalid_count_out[i];
-	}*/
 	int sum = invalid_count_out[0];
 	
 	if (sum > ctx->cleanup_threshold) {
@@ -246,7 +239,7 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 
 		cleanup_r<<<w_ctx->gpu_gridsize, w_ctx->gpu_blocksize>>>(
                 	*(w_ctx->s_processed),
-			output, output_buffersize,
+			output, output_size/2,
 			w_ctx->S.a, w_ctx->S.b, w_ctx->R.x, w_ctx->R.y,
                 	w_ctx->S.t_ns, w_ctx->R.t_ns,
 			ctx->generate_tuples_S, ctx->generate_tuples_R,
@@ -257,7 +250,7 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			cleanup_bitmap_S, cleanup_bitmap_R,
 			ht_size);
 		CUDA_SAFE(cudaDeviceSynchronize())
-		memset(cleanup_bitmap_R,0,cleanup_size);
+		CUDA_SAFE(cudaMemset(cleanup_bitmap_R,0,cleanup_size))
 
 		end_time = timer.now();
 		w_ctx->stats.runtime_cleanup += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
