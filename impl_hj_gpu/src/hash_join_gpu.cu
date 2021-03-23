@@ -144,8 +144,10 @@ void init(master_ctx_t *ctx){
 	
 
 	CUDA_SAFE(cudaHostAlloc(&output_location, sizeof(int), 0))
+    *output_location = 0;
 	
 	CUDA_SAFE(cudaHostAlloc(&invalid_count_out, sizeof(int), 0))
+    *invalid_count_out = 0;
 
 	// Cleanup Bitmap
 	cleanup_size = ht_size * sizeof(unsigned);

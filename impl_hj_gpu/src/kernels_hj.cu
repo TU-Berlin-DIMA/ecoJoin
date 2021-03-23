@@ -207,27 +207,27 @@ void cleanup_r( int s_processed,
 		if (get_bit(i, cleanup_bitmap_R)){
 			uint32_t tpl_cnt = hmR[i].counter;
 			chunk_R *chunk = (chunk_R*) hmR[i].address; // head
-			for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
-				// find first correct entry
-				if ((chunk[j].t_ns + window_size_S * n_sec)
-						> s_get_tns(generate_tuples_S, s_iterations, s_rate, s_processed, s_ts)) {
-					// Remove + Move
-					int l = 0;
-					for(size_t u = j; u < tpl_cnt; u++, l++) { // non-empty
-						chunk[l].t_ns = chunk[u].t_ns;
-                                                chunk[l].x = chunk[u].x;
-                                                chunk[l].y = chunk[u].y;
-                                                chunk[l].r = chunk[u].r;
-					}
-					hmR[i].counter -= j;
-					break;
-				}
 
-				// all entires are invalid
-				if (tpl_cnt == j-1)
-					hmR[i].counter = 0;
-			}
-			
+            size_t j = 0;
+            size_t u = tpl_cnt - 1ul;
+            int deleted = 0;
+            while (j <= u) {
+				if ((chunk[j].t_ns + window_size_S * n_sec)
+						<= s_get_tns(generate_tuples_S, s_iterations, s_rate, s_processed, s_ts)) { // invalid
+						chunk[j].t_ns = chunk[u].t_ns;
+                        chunk[j].x = chunk[u].x;
+                        chunk[j].y = chunk[u].y;
+                        chunk[j].r = chunk[u].r;
+
+                        --u;
+                        ++deleted;
+                }
+                else {
+                    ++j;
+                }
+            }
+
+            hmR[i].counter -= deleted;
 		}
 	}
 }
@@ -359,27 +359,27 @@ void cleanup_s(	int r_processed,
 		if (get_bit(i, cleanup_bitmap_S)){
 			uint32_t tpl_cnt = hmS[i].counter;
 			chunk_S *chunk = (chunk_S*) hmS[i].address; // head
-			for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
-				// find first correct entry
-				if ((chunk[j].t_ns + window_size_S * n_sec)
-						> r_get_tns(generate_tuples_R, r_iterations, r_rate, r_processed, r_ts)) {
-					// Remove + Move
-					int l = 0;
-					for(size_t u = j; u < tpl_cnt; u++,  l++) { // non-empty
-						chunk[l].t_ns = chunk[u].t_ns;
-                                                chunk[l].a = chunk[u].a;
-                                                chunk[l].b = chunk[u].b;
-                                                chunk[l].s = chunk[u].s;
-					}
-					hmS[i].counter -= j;
-					//printf("%d\n",hmS[i].counter);
-					break;
-				}
 
-				// all entires are invalid
-				if (tpl_cnt == j-1)
-					hmS[i].counter = 0;
-			}
+            size_t j = 0;
+            size_t u = tpl_cnt - 1ul;
+            int deleted = 0;
+            while (j <= u) {
+				if ((chunk[j].t_ns + window_size_R * n_sec)
+						<= r_get_tns(generate_tuples_R, r_iterations, r_rate, r_processed, r_ts)) { // invalid
+						chunk[j].t_ns = chunk[u].t_ns;
+                        chunk[j].a = chunk[u].a;
+                        chunk[j].b = chunk[u].b;
+                        chunk[j].s = chunk[u].s;
+
+                        --u;
+                        ++deleted;
+                }
+                else {
+                    ++j;
+                }
+            }
+
+            hmS[i].counter -= deleted;
 		}
 	}
 }
