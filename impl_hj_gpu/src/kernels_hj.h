@@ -10,9 +10,19 @@ struct ht{
         uint64_t address;
 }; // 16 Byte
 
-/*
- * Simplified Version of Hells Join Kernel
- */
+struct chunk_R{
+        long t_ns; /* timestamp */
+        int x; /* key */
+        int y; /* value */
+        int r; /* index */
+}; // 32 Byte
+
+struct chunk_S{
+        long t_ns; /* timestamp */
+        int a; /* key */
+        int b; /* value */
+        int s; /* index */
+}; // 32 Byte
 
 __global__
 void compare_kernel_new_s_hj(
@@ -28,7 +38,8 @@ void compare_kernel_new_s_hj(
                 unsigned *cleanup_bitmap_S, unsigned *cleanup_bitmap_R,
 		int ht_size_r, int ht_size_s,
                 int count, int* output_location,
-		int *invalid_count_out);
+		int *invalid_count_out,
+		int tup_per_chunk);
 
 
 __global__
@@ -60,7 +71,8 @@ void compare_kernel_new_r_hj(
                 unsigned *cleanup_bitmap_S, unsigned *cleanup_bitmap_R,
 		int ht_size_r, int ht_size_s,
                 int count, int* output_location,
-		int *invalid_count_out);
+		int *invalid_count_out,
+		int tup_per_chunk);
 
 
 __global__

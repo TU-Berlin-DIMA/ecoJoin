@@ -48,6 +48,7 @@ struct ht{
 	uint64_t address;
 }; // 16 Byte
 
+
 static const long n_sec = 1000000000L;
 
 /* 
@@ -94,15 +95,16 @@ void compare_kernel_new_s_hj(
 		unsigned *cleanup_bitmap_S, unsigned *cleanup_bitmap_R,
 		int ht_size_r, int ht_size_s,
 		int count, int* output_location,
-		int *invalid_count_out) {
+		int *invalid_count_out,
+		int tpl_per_chunk) {
 	unsigned int tid = threadIdx.x;
 	const size_t idx = threadIdx.x + blockIdx.x * blockDim.x;
 	const long global_threads = blockDim.x * gridDim.x;
 
-	int invalid_count = 0;
-	//if (idx == 0)
-	//	invalid_count_out[0] = 0;
+	if (idx == 0)
+		invalid_count_out[0] = 0;
 	extern __shared__ int sdata[];
+	int invalid_count = 0;
         for (int s = idx + s_processed; s < count + s_processed; s += global_threads){
 
 		const int k = a[s];
@@ -119,7 +121,7 @@ void compare_kernel_new_s_hj(
 		hash = hash & (ht_size_s-1);
 		int tpl_cntr = atomicAdd(&(hmS[hash].counter), 1);
 		
-		if (tpl_cntr >= 64) {
+		if (tpl_cntr >= tpl_per_chunk) {
 			printf("Chunk full at index: %d in S, hash: %d, s: %d \n", tpl_cntr, hash, s);
 			__threadfence();
 			assert(0);
@@ -157,15 +159,17 @@ void compare_kernel_new_s_hj(
 					}
 				} else { // Invalid
 					set_bit(hash, cleanup_bitmap_R);
-					atomicAdd(invalid_count_out, 1);
+					//#1
+					//atomicAdd(invalid_count_out, 1);
+					//#2
+					invalid_count++;
 					//invalid_count_out[0]++;
-					//invalid_count++;
 				}
 			}
 		} 
 	}
 
-	/*sdata[tid] = invalid_count;
+	sdata[tid] = invalid_count;
 	__syncthreads();
 	// do reduction in shared mem
 	for(unsigned int s=1; s < blockDim.x; s *= 2) { 
@@ -176,7 +180,7 @@ void compare_kernel_new_s_hj(
 	}
 	// write result for this block to global mem
 	if (tid == 0) 
-		invalid_count_out[blockIdx.x] = sdata[0];*/
+		invalid_count_out[blockIdx.x] = sdata[0];
 }
 
 /*
@@ -244,13 +248,14 @@ void compare_kernel_new_r_hj(
 		unsigned *cleanup_bitmap_S, unsigned *cleanup_bitmap_R,
 		int ht_size_r, int ht_size_s,
 		int count, int* output_location,
-		int *invalid_count_out) {
+		int *invalid_count_out,
+		int tpl_per_chunk) {
 	unsigned int tid = threadIdx.x;
 	const size_t idx = threadIdx.x + blockIdx.x * blockDim.x;
 	const long global_threads = blockDim.x * gridDim.x;
 
-	//if (idx == 0)
-	//	invalid_count_out[0] = 0;
+	if (idx == 0)
+		invalid_count_out[0] = 0;
 
 	int invalid_count = 0;
 	extern __shared__ int sdata[];
@@ -269,7 +274,7 @@ void compare_kernel_new_r_hj(
 		hash = hash & (ht_size_r-1);
 		int tpl_cntr = atomicAdd(&(hmR[hash].counter), 1);
 		
-		if (tpl_cntr >= 64) {
+		if (tpl_cntr >= tpl_per_chunk) {
 			printf("%d\n", window_size_R);
 			printf("Chunk full at index: %d in R, hash: %d, r: %d\n", tpl_cntr, hash, r);
 			__threadfence();
@@ -304,15 +309,18 @@ void compare_kernel_new_r_hj(
 					}
 				} else { // Invalid
 					set_bit(hash, cleanup_bitmap_S);
-					atomicAdd(invalid_count_out, 1);
+					//#1
+					//atomicAdd(invalid_count_out, 1);
+					//#2
+					invalid_count++;
 					//invalid_count_out[0]++;
-					//invalid_count++;
+
 				}
 			}
 		}
 	}
 
-	/*sdata[tid] = invalid_count;
+	sdata[tid] = invalid_count;
 	__syncthreads();
 	// do reduction in shared mem
 	for(unsigned int s=1; s < blockDim.x; s *= 2) { 
@@ -323,8 +331,8 @@ void compare_kernel_new_r_hj(
 	}
 	// write result for this block to global mem
 	if (tid == 0) 
-		invalid_count_out[blockIdx.x] = sdata[0];*/
-		
+		invalid_count_out[blockIdx.x] = sdata[0];
+
 }
 
 /*

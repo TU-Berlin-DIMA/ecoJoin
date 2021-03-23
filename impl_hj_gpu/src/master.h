@@ -98,6 +98,8 @@ struct master_ctx_t {
 	std::condition_variable data_cv;
 	std::mutex data_mutex;
 	
+	int tpl_per_chunk;
+	
 	/**
 	 * Input data stream R
 	 */

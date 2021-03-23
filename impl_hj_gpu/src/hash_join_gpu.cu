@@ -28,22 +28,6 @@ static unsigned output_buffersize = 0;
 static const double load_factor = 0.2;
 static const unsigned output_size = 2097152; /* 2^21 */
 
-struct chunk_R{
-	long  t_ns;
-        int             x; /* key */
-        int             y; /* value */
-	int             r; /* index */
-}; // 32 Byte
-
-
-struct chunk_S{
-	long  t_ns;
-       	int             a; /* key */
-        int             b; /* value */
-	int             s; /* index */
-}; // 32 Byte
-
-
 ht *hmR;
 ht *hmS;
 
@@ -100,13 +84,40 @@ void init(master_ctx_t *ctx){
 	assert(ht_size % 2 == 0);
 	assert(ht_mask != 0);
 
-	//CUDA_SAFE(cudaMalloc(&hmR, ht_size*sizeof(ht)))
-	//CUDA_SAFE(cudaMalloc(&hmS, ht_size*sizeof(ht)))
+	CUDA_SAFE(cudaMalloc(&hmR, ht_size*sizeof(ht)))
+	CUDA_SAFE(cudaMalloc(&hmS, ht_size*sizeof(ht)))
 
-	CUDA_SAFE(cudaHostAlloc(&hmR, ht_size*sizeof(ht),0))
-	CUDA_SAFE(cudaHostAlloc(&hmS, ht_size*sizeof(ht),0))
+	//CUDA_SAFE(cudaHostAlloc(&hmR, ht_size*sizeof(ht),0))
+	//CUDA_SAFE(cudaHostAlloc(&hmS, ht_size*sizeof(ht),0))
 
+	ht *hmR_h = (ht *)malloc(ht_size*sizeof(ht));
+	CUDA_SAFE(cudaMalloc((void**)&hmR, ht_size*sizeof(ht)))
+	for(int i=0; i<ht_size; i++) {
+		chunk_R *chunk;
+		CUDA_SAFE(cudaMalloc(&chunk, chunk_size))
+    		hmR_h[i].address = (uint64_t)chunk;
+	}
+	CUDA_SAFE(cudaMemcpy(hmR, hmR_h, ht_size*sizeof(ht), cudaMemcpyHostToDevice))
+
+	ht *hmS_h = (ht *)malloc(ht_size*sizeof(ht));
+	CUDA_SAFE(cudaMalloc((void**)&hmS, ht_size*sizeof(ht)))
+	for(int i=0; i<ht_size; i++) {
+		chunk_S *chunk;
+		CUDA_SAFE(cudaMalloc(&chunk, chunk_size))
+    		hmS_h[i].address = (uint64_t)chunk;
+	}
+	CUDA_SAFE(cudaMemcpy(hmS, hmS_h, ht_size*sizeof(ht), cudaMemcpyHostToDevice))
+	
+
+	
+	/*chunk_R *chunks_r[];
+	chunk_S *chunks_s[];
 	for (unsigned i = 0; i < ht_size; i++){
+		CUDA_SAFE(cudaMalloc(&(chunks_r[i]), chunk_size))
+		CUDA_SAFE(cudaMalloc(&(chunks_s[i]), chunk_size))
+	}*/
+
+	/*for (unsigned i = 0; i < ht_size; i++){
 		chunk_R *chunk;
 		//CUDA_SAFE(cudaMalloc(&chunk, chunk_size))
 		CUDA_SAFE(cudaHostAlloc(&chunk, chunk_size,0))
@@ -119,7 +130,7 @@ void init(master_ctx_t *ctx){
 		CUDA_SAFE(cudaHostAlloc(&chunk, chunk_size,0))
 		hmS[i].address = (uint64_t)chunk;
 		hmS[i].counter = 0;
-	}
+	}*/
 
 	// Init output tuple buffer
 	output_mask = output_size - 1;

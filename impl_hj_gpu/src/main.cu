@@ -46,6 +46,7 @@ static void usage(){
 	printf ("  -f enable frequency by stream join\n");
 	printf ("  -e end when worker ends\n");
 	printf ("  -z process data in one batch\n");
+	printf ("  -a tuples per chunk\n");
 }
 
 int main(int argc, char **argv) {
@@ -64,7 +65,7 @@ int main(int argc, char **argv) {
 	ctx->num_tuples_S = 1800000;
 	ctx->num_tuples_R = 1800000;
 	ctx->int_value_range   = INT_MAX;
-	ctx->float_value_range = INT_MAX;
+	ctx->float_value_range = ctx->int_value_range;
 	ctx->processing_mode = cpu1_mode;
 	ctx->idle_window_time = 0;
 	ctx->process_window_time = 10;
@@ -87,9 +88,10 @@ int main(int argc, char **argv) {
 	ctx->r_iterations = 1;
 	ctx->s_iterations = 1;
 	ctx->cleanup_threshold = 2000;
+	ctx->tpl_per_chunk = 64;
 	
 	/* parse command lines */
-	while ((ch = getopt (argc, argv, "c:n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:f:F:ePzl")) != -1)
+	while ((ch = getopt (argc, argv, "c:n:N:O:r:R:w:W:p:s:S:TtB:b:g:G:f:F:ePzlm:a:")) != -1)
 	{
 		switch (ch)
 		{
@@ -128,30 +130,7 @@ int main(int argc, char **argv) {
 				ctx->window_size_S = strtol (optarg, NULL, 10);
 				break;
 			case 'p':
-				if (strncmp(optarg,"cpu1",4) == 0)
-					ctx->processing_mode = cpu1_mode;
-				else if (strncmp(optarg,"cpu2",4) == 0)
-					ctx->processing_mode = cpu2_mode;
-				else if (strncmp(optarg,"cpu3",4) == 0)
-					ctx->processing_mode = cpu3_mode;
-				else if (strncmp(optarg,"cpu4",4) == 0)
-					ctx->processing_mode = cpu4_mode;
-				else if (strncmp(optarg,"gpu",3) == 0)
-					ctx->processing_mode = gpu_mode;
-				else if (strncmp(optarg,"atomic",6) == 0)
-					ctx->processing_mode = atomic_mode;
-				else if (strncmp(optarg,"ht_cpu1",7) == 0)
-					ctx->processing_mode = ht_cpu1_mode;
-				else if (strncmp(optarg,"ht_cpu2",7) == 0)
-					ctx->processing_mode = ht_cpu2_mode;
-				else if (strncmp(optarg,"ht_cpu3",7) == 0)
-					ctx->processing_mode = ht_cpu3_mode;
-				else if (strncmp(optarg,"ht_cpu4",7) == 0)
-					ctx->processing_mode = ht_cpu4_mode;
-				else if (strncmp(optarg,"ht_gpu",7) == 0)
-					ctx->processing_mode = ht_gpu_mode;
-				else
-					ctx->processing_mode = cpu1_mode;
+				ctx->processing_mode = ht_gpu_mode;
 				break;
 			case 'P':
 				ctx->range_predicate = true;
@@ -217,6 +196,13 @@ int main(int argc, char **argv) {
 			case 'l':
 				ctx->linear_data = true;
 				break;
+			case 'm':
+				ctx->int_value_range = (unsigned)atoi(optarg);
+				ctx->float_value_range = (unsigned)atoi(optarg);
+				break;
+			case 'a':
+				ctx->tpl_per_chunk= (unsigned)atoi(optarg);
+				break;
 			case 'h':
 			case '?':
 			default:
@@ -239,6 +225,10 @@ int main(int argc, char **argv) {
 			ctx->r_batch_size, ctx->s_batch_size);
 	fprintf (ctx->outfile, "#   - cleanup threshold: %u\n",
 			ctx->cleanup_threshold);
+	fprintf (ctx->outfile, "#   - max key values: %u\n",
+			ctx->int_value_range);
+	fprintf (ctx->outfile, "#   - tuples per chunk: %u\n",
+			ctx->tpl_per_chunk);
 	if (ctx->window_size_S == ctx->window_size_R && ctx->num_tuples_R == ctx->num_tuples_S)
 		fprintf (ctx->outfile, "# Stream will run for %f minutes\n",(float)ctx->num_tuples_R/(float)ctx->rate_R/60);
 	generate_data (ctx);
