@@ -269,7 +269,10 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 						unsigned s = chunk[j].s;
 						out_tuples.push_back(tuple<uint32_t, uint32_t>(r,s));
 						emitted_tuples++;
+#ifdef DEBUG
 						calc_latency_r(ctx ,w_ctx, r);
+						//printf("from r: %d %d\n",r, s);
+#endif
 					}
 				} else { // Invalid
 					to_delete_bitmap_S[hash] = 1;
@@ -443,7 +446,10 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 						unsigned r = chunk[j].r;
 						out_tuples.push_back(tuple<uint32_t, uint32_t>(r,s));
 						emitted_tuples++;
+#ifdef DEBUG
 						calc_latency_s(ctx, w_ctx, s);
+						//printf("from s: %d %d\n",r, s);
+#endif
 					} 
 				} else { // Invalid
 					to_delete_bitmap_R[hash] = 1;
@@ -463,6 +469,7 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			output[((processed_tuples+emitted_sum+j) & output_mask)*2]   = get<0>(i);
 			output[((processed_tuples+emitted_sum+j) & output_mask)*2+1] = get<1>(i);
 			j++;
+
 		}
 		
 		to_delete_sum += to_delete_tuples;

@@ -1,4 +1,5 @@
 HASH     = 0
+DEBUG     = 0
 
 TARGET   = gpu_stream
 
