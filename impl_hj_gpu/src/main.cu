@@ -210,8 +210,6 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if(ctx->enable_freq_scaling)
-		set_freq(ctx->frequency_mode, ctx->min_cpu_freq, ctx->min_gpu_freq);
 
 	fprintf (ctx->outfile, "# Generating input data...\n");
 	fprintf (ctx->outfile, "# Using parameters:\n");
@@ -314,6 +312,8 @@ int main(int argc, char **argv) {
 	else if (ctx->processing_mode == ht_gpu_mode)
 		fprintf (ctx->outfile, "# Use GPU hash join processing mode\n\n");
 	
+	if(ctx->enable_freq_scaling)
+		set_freq(ctx->frequency_mode, ctx->min_cpu_freq, ctx->min_gpu_freq);
 
 	if (ctx->range_predicate)
 		fprintf (ctx->outfile, "# Use range predicate\n\n");
