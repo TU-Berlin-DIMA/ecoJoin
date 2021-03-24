@@ -1,0 +1,16 @@
+-n 3840 -N 3840 -w 10 -W 10 -R 32 -r 32 -p ht_cpu4 -b 32 -B 32 -O bench.csv -c 12
+-n 7680 -N 7680 -w 10 -W 10 -R 64 -r 64 -p ht_cpu4 -b 64 -B 64 -O bench.csv -c 30
+-n 15360 -N 15360 -w 10 -W 10 -R 128 -r 128 -p ht_cpu4 -b 128 -B 128 -O bench.csv -c 60
+-n 30720 -N 30720 -w 10 -W 10 -R 256 -r 256 -p ht_cpu4 -b 256 -B 256 -O bench.csv -c 125
+-n 61440 -N 61440 -w 10 -W 10 -R 512 -r 512 -p ht_cpu4 -b 512 -B 512 -O bench.csv -c 250
+-n 122880 -N 122880 -w 10 -W 10 -R 1024 -r 1024 -p ht_cpu4 -b 1024 -B 1024 -O bench.csv -c 500
+-n 245760 -N 245760 -w 10 -W 10 -R 2048 -r 2048 -p ht_cpu4 -b 2048 -B 2048 -O bench.csv -c 1000
+-n 491520 -N 491520 -w 10 -W 10 -R 4096 -r 4096 -p ht_cpu4 -b 4096 -B 4096 -O bench.csv -c 2000
+-n 983040 -N 983040 -w 10 -W 10 -R 8192 -r 8192 -p ht_cpu4 -b 8192 -B 8192 -O bench.csv -c 4000
+-n 1966080 -N 1966080 -w 10 -W 10 -R 16384 -r 16384 -p ht_cpu4 -b 16384 -B 16384 -O bench.csv -c 8000
+-n 3932160 -N 3932160 -w 10 -W 10 -R 32768 -r 32768 -p ht_cpu4 -b 32768 -B 32768 -O bench.csv -c 16000 
+-n 7864320 -N 7864320 -w 10 -W 10 -R 65536 -r 65536 -p ht_cpu4 -b 65536 -B 65536 -O bench.csv -c 32000 
+-n 15728640 -N 15728640 -w 10 -W 10 -R 131072 -r 131072 -p ht_cpu4 -b 131072 -B 131072 -O bench.csv -c 60000
+-n 31457280 -N 31457280 -w 10 -W 10 -R 262144 -r 262144 -p ht_cpu4 -b 262144 -B 262144 -O bench.csv -c 120000
+-n 62914560 -N 62914560 -w 10 -W 10 -R 524288 -r 524288 -p ht_cpu4 -b 524288 -B 524288 -O bench.csv -c 250000
+-n 125829120 -N 125829120 -w 10 -W 10 -R 1048576 -r 1048576 -p ht_cpu4 -b 1048576 -B 1048576 -O bench.csv -c 490000
