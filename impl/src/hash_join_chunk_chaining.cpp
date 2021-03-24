@@ -313,24 +313,26 @@ void process_r_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			if (to_delete_bitmap_S.test(i)){
 				uint32_t tpl_cnt = hmS[i].counter.load(std::memory_order_relaxed);
 				chunk_S *chunk = (chunk_S*) hmS[i].address; // head
-				for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
-					if ((chunk[j].t_ns.count() + w_ctx->window_size_S * n_sec)
-						< r_get_tns(ctx,*(w_ctx->r_processed)).count()) {
-						// Remove + Move
-						for (int u = 0, l = 0; u < tpl_cnt; u++) {
-							if ((u != j || u != j+1) && u != l) {
-								chunk[l].t_ns = chunk[u].t_ns;
-								chunk[l].a = chunk[u].a;
-								chunk[l].b = chunk[u].b;
-								chunk[l].s = chunk[u].s;
-								l++;
-							}
-						}
-						tpl_cnt--;
-						hmS[i].counter--; // Update tpl counter
+				size_t j = 0;
+			    	size_t u = tpl_cnt - 1ul;
+			    	int deleted = 0;
+				while (j <= u) {
+					if ((chunk[j].t_ns.count() + w_ctx->window_size_R * n_sec)
+					<= s_get_tns(ctx,*(w_ctx->s_processed)).count()) { // invalid
+						chunk[j].t_ns = chunk[u].t_ns;
+						chunk[j].a = chunk[u].a;
+						chunk[j].b = chunk[u].b;
+						chunk[j].s = chunk[u].s;
+
+						--u;
+						++deleted;
+					} else {
+				    		++j;
 					}
-				}
-			}
+			    	}
+            			hmS[i].counter -= deleted;
+
+            		}
 		}
 		to_delete_bitmap_S.reset();
 	}
@@ -484,28 +486,30 @@ void process_s_ht_cpu(master_ctx_t *ctx, worker_ctx_t *w_ctx){
 			if (to_delete_bitmap_R.test(i)){
 				uint32_t tpl_cnt = hmR[i].counter.load(std::memory_order_relaxed);
 				chunk_R *chunk = (chunk_R*) hmR[i].address; // head
-				for(size_t j = 0; j < tpl_cnt; j++) { // non-empty
-					if ((chunk[j].t_ns.count() + w_ctx->window_size_R * n_sec)
-						< s_get_tns(ctx,*(w_ctx->s_processed)).count()) {
-						// Remove + Move
-						for (int u = 0, l = 0; u < tpl_cnt; u++) {
-							if ((u != j || u != j+1) && u != l) {
-								chunk[l].t_ns = chunk[u].t_ns;
-								chunk[l].x = chunk[u].x;
-								chunk[l].y = chunk[u].y;
-								chunk[l].r = chunk[u].r;
-								l++;
-							}
-						}
-						tpl_cnt--;
-						hmR[i].counter--; // Update tpl counter
+				size_t j = 0;
+			    	size_t u = tpl_cnt - 1ul;
+			    	int deleted = 0;
+				while (j <= u) {
+					if ((chunk[j].t_ns.count() + w_ctx->window_size_S * n_sec)
+					<= r_get_tns(ctx,*(w_ctx->r_processed)).count()) { // invalid
+						chunk[j].t_ns = chunk[u].t_ns;
+						chunk[j].x = chunk[u].x;
+						chunk[j].y = chunk[u].y;
+						chunk[j].r = chunk[u].r;
+
+						--u;
+						++deleted;
+					} else {
+				    		++j;
 					}
-				}
-			}
+			    	}
+            			hmR[i].counter -= deleted;
+
+            		}
 		}
 		to_delete_bitmap_R.reset();
 	}
-	
+			
 #ifdef DEBUG
 	end_time = timer.now();
 	w_ctx->stats.runtime_proc += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
