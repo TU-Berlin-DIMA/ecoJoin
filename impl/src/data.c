@@ -123,6 +123,7 @@ void generate_data (master_ctx_t *ctx)
 		t = get_current_ns(ctx,t);
 		ctx->R.t_ns[i] = t;
 		
+		/*
 		int j = random () % ctx->int_value_range;
 		if (i % 2 == 0) {
 			ctx->R.x[i] = j / 2;
@@ -131,11 +132,12 @@ void generate_data (master_ctx_t *ctx)
 			ctx->R.x[i] = (j / 2) + 1;
 			ctx->R.y[i] = j / 2;
 		}
+		*/
 
-		/*
+		
 		ctx->R.x[i] = random () % ctx->int_value_range;
 		ctx->R.y[i] = (float) (random () % ctx->float_value_range);
-		*/
+		
 	    }
 
 	    /* generate data for S */
@@ -144,7 +146,7 @@ void generate_data (master_ctx_t *ctx)
 	    {
 		t = get_current_ns(ctx,t);
 		ctx->S.t_ns[i] = t;
-		
+		/*
 		int j = random () % ctx->int_value_range;
 		if (j % 2 == 0) {
 			ctx->S.a[i] = j / 2;
@@ -153,11 +155,11 @@ void generate_data (master_ctx_t *ctx)
 			ctx->S.a[i] = (j / 2) + 1;
 			ctx->S.b[i] = j / 2;
 		}
+		*/
 
-		/*
+		
 		ctx->S.a[i] = random () % ctx->int_value_range;
 		ctx->S.b[i] = (float) (random () % ctx->float_value_range);
-		*/
 	    }
     } else { // linear data
 	    std::cout << "# Create Linear Dataset\n";
