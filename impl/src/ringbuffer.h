@@ -17,14 +17,14 @@
 #ifndef RINGBUFFER_H
 #define RINGBUFFER_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 /**
  * We use one byte for status information.  Hence, messages may be
  * at most (#CACHELINESIZE - 1) bytes long.
  */
-#define MAX_MESSAGESIZE ((CACHELINESIZE) - 1)
+#define MAX_MESSAGESIZE ((CACHELINESIZE)-1)
 
 /**
  * We store one message in one cache line.  The last byte is used
@@ -43,9 +43,9 @@
  * actually packs the message together into one cache line.
  */
 struct message_t {
-    volatile uint8_t   message[MAX_MESSAGESIZE];
-    volatile uint8_t   size;
-} __attribute__ ((packed, aligned (CACHELINESIZE)));
+    volatile uint8_t message[MAX_MESSAGESIZE];
+    volatile uint8_t size;
+} __attribute__((packed, aligned(CACHELINESIZE)));
 typedef struct message_t message_t;
 
 /**
@@ -57,12 +57,12 @@ typedef struct message_t message_t;
  * sure that they are placed in different cache lines.
  */
 struct ringbuffer_t {
-    unsigned int   num_msgs;  /**< number of slots in this ring buffer */
-    message_t     *messages;  /**< the actual messages */
-    unsigned int   writer_pos __attribute__ ((aligned (CACHELINESIZE)));
-        /**< next slot that the producer will write to */
-    unsigned int   reader_pos __attribute__ ((aligned (CACHELINESIZE)));
-        /**< next slot that the consumer will (try to) read */
+    unsigned int num_msgs; /**< number of slots in this ring buffer */
+    message_t* messages; /**< the actual messages */
+    unsigned int writer_pos __attribute__((aligned(CACHELINESIZE)));
+    /**< next slot that the producer will write to */
+    unsigned int reader_pos __attribute__((aligned(CACHELINESIZE)));
+    /**< next slot that the consumer will (try to) read */
 };
 typedef struct ringbuffer_t ringbuffer_t;
 
@@ -72,7 +72,7 @@ typedef struct ringbuffer_t ringbuffer_t;
  * Allocates memory for a ringbuffer_t structure, as well as for
  * the respective messages array.
  */
-ringbuffer_t * new_ringbuffer (unsigned int num_msgs, int node);
+ringbuffer_t* new_ringbuffer(unsigned int num_msgs, int node);
 
 /**
  * Send a message.
@@ -92,21 +92,20 @@ ringbuffer_t * new_ringbuffer (unsigned int num_msgs, int node);
  *         if @a buf was @c NULL); @c false indicates that the FIFO queue
  *         was full
  */
-bool send (ringbuffer_t *buf, const void *message, unsigned int msg_size);
+bool send(ringbuffer_t* buf, const void* message, unsigned int msg_size);
 
 /**
  * Return true if the queue is full, a send() to the queue might block.
  */
-#define full(ringbuffer) \
+#define full(ringbuffer)  \
     ((ringbuffer) != NULL \
-       && (ringbuffer)->messages[ringbuffer->writer_pos].size != 0)
+        && (ringbuffer)->messages[ringbuffer->writer_pos].size != 0)
 
 /**
  * Return true if no messages are waiting in the buffer, otherwise false.
  */
 #define empty_(ringbuffer) \
-       ((ringbuffer)->messages[ringbuffer->reader_pos].size == 0)
-
+    ((ringbuffer)->messages[ringbuffer->reader_pos].size == 0)
 
 /**
  * Receive a message (non-blocking).
@@ -115,7 +114,7 @@ bool send (ringbuffer_t *buf, const void *message, unsigned int msg_size);
  * returns message size (in bytes).  Returns 0 if there was no message
  * in the ring buffer.
  */
-unsigned int receive (ringbuffer_t *buf, void *message);
+unsigned int receive(ringbuffer_t* buf, void* message);
 
 /**
  * Peek at a message, without actually receiving it.
@@ -124,6 +123,6 @@ unsigned int receive (ringbuffer_t *buf, void *message);
  * waiting in the ring buffer).  Writes a pointer to the message into
  * the address given by @a msg.
  */
-unsigned int peek (ringbuffer_t *buf, void **msg);
+unsigned int peek(ringbuffer_t* buf, void** msg);
 
-#endif  /* RINGBUFFER_H */
+#endif /* RINGBUFFER_H */

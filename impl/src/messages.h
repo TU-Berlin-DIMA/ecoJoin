@@ -27,11 +27,15 @@
  */
 enum core2core_msg_type_t {
 
-      new_R_msg   /**< tuple of stream R (sent to right, recvd from left) */
-    , new_S_msg   /**< tuple of stream S (sent to left, recvd from right) */
-    , ack_R_msg   /**< ack. of an R tuple (sent to left, recvd from right) */
-    , ack_S_msg   /**< ack. of an S tuple (sent to right, recvd from left) */
-    , flush_msg   /**< flush buffers with outgoing result tuples */
+    new_R_msg /**< tuple of stream R (sent to right, recvd from left) */
+    ,
+    new_S_msg /**< tuple of stream S (sent to left, recvd from right) */
+    ,
+    ack_R_msg /**< ack. of an R tuple (sent to left, recvd from right) */
+    ,
+    ack_S_msg /**< ack. of an S tuple (sent to right, recvd from left) */
+    ,
+    flush_msg /**< flush buffers with outgoing result tuples */
 
 };
 typedef enum core2core_msg_type_t core2core_msg_type_t;
@@ -116,17 +120,15 @@ struct core2core_msg_t {
     union {
         chunk_R_msg_t chunk_R;
         chunk_S_msg_t chunk_S;
-        ack_R_msg_t   ack_R;
-        ack_S_msg_t   ack_S;
+        ack_R_msg_t ack_R;
+        ack_S_msg_t ack_S;
     } msg;
-
 };
 typedef struct core2core_msg_t core2core_msg_t;
 
-
 struct result_t {
-    uint32_t    r;
-    uint32_t    s;
+    uint32_t r;
+    uint32_t s;
 };
 typedef struct result_t result_t;
 
@@ -134,7 +136,7 @@ typedef struct result_t result_t;
  * Multiple result tuples can be packaged into a single message.
  * This value gives the number of tuples per message.
  */
-#define RESULTS_PER_MESSAGE (MAX_MESSAGESIZE / sizeof (result_t))
+#define RESULTS_PER_MESSAGE (MAX_MESSAGESIZE / sizeof(result_t))
 
 /**
  * A single result message (encoding #RESULTS_PER_MESSAGE result tuples).

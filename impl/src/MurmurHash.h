@@ -11,9 +11,9 @@
 
 #ifndef MURM
 #define MURM
-__device__
-void MurmurHash_x86_32(const void *key, int len, uint32_t seed, void *out) {
-    const uint8_t *data = (const uint8_t *)key;
+__device__ void MurmurHash_x86_32(const void* key, int len, uint32_t seed, void* out)
+{
+    const uint8_t* data = (const uint8_t*)key;
     const int nblocks = len / 4;
 
     uint32_t h1 = seed;
@@ -24,7 +24,7 @@ void MurmurHash_x86_32(const void *key, int len, uint32_t seed, void *out) {
     //----------
     // body
 
-    const uint32_t *blocks = (const uint32_t *)(data + nblocks * 4);
+    const uint32_t* blocks = (const uint32_t*)(data + nblocks * 4);
 
     for (int i = -nblocks; i; i++) {
         uint32_t k1 = blocks[i];
@@ -41,21 +41,21 @@ void MurmurHash_x86_32(const void *key, int len, uint32_t seed, void *out) {
     //----------
     // tail
 
-    const uint8_t *tail = (const uint8_t *)(data + nblocks * 4);
+    const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
 
     uint32_t k1 = 0;
 
     switch (len & 3) {
-        case 3:
-            k1 ^= tail[2] << 16;
-        case 2:
-            k1 ^= tail[1] << 8;
-        case 1:
-            k1 ^= tail[0];
-            k1 *= c1;
-            k1 = (k1 << 15) | (k1 >> (32 - 15));
-            k1 *= c2;
-            h1 ^= k1;
+    case 3:
+        k1 ^= tail[2] << 16;
+    case 2:
+        k1 ^= tail[1] << 8;
+    case 1:
+        k1 ^= tail[0];
+        k1 *= c1;
+        k1 = (k1 << 15) | (k1 >> (32 - 15));
+        k1 *= c2;
+        h1 ^= k1;
     };
 
     //----------
@@ -69,6 +69,6 @@ void MurmurHash_x86_32(const void *key, int len, uint32_t seed, void *out) {
     h1 *= 0xc2b2ae35;
     h1 ^= h1 >> 16;
 
-    *(uint32_t *)out = h1;
+    *(uint32_t*)out = h1;
 }
 #endif

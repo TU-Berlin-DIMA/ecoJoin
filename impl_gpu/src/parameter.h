@@ -14,13 +14,11 @@
  */
 #define MESSAGE_QUEUE_LENGTH 64
 
-
 /**
  * We use one byte for status information.  Hence, messages may be
  * at most (#CACHELINESIZE - 1) bytes long.
  */
-#define MAX_MESSAGESIZE ((CACHELINESIZE) - 1)
-
+#define MAX_MESSAGESIZE ((CACHELINESIZE)-1)
 
 /**
  * Time interval (in nano-seconds) with which main.c:collect_results()

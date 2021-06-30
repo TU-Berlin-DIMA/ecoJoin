@@ -1,8 +1,8 @@
 #ifndef STATISTICA_H
 #define STATISTICS_H
 
-#include "time.h"
 #include "master.h"
+#include "time.h"
 #include <chrono>
 #include <unordered_map>
 
@@ -49,9 +49,9 @@ struct statistics {
     std::unordered_map<int, double> cpu_usage;
 };
 
-void print_statistics(statistics *stats, FILE *outfile, FILE *resultfile,  master_ctx_t *ctx);
+void print_statistics(statistics* stats, FILE* outfile, FILE* resultfile, master_ctx_t* ctx);
 
-void write_histogram_stats(statistics *stats, std::string filename);
+void write_histogram_stats(statistics* stats, std::string filename);
 
 double get_current_cpu_usage();
-#endif 
+#endif

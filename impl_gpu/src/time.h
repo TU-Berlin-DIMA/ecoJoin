@@ -17,22 +17,21 @@
 #ifndef TIME_H
 #define TIME_H
 
-
-#include <time.h>
-#include <sys/time.h>
 #include <chrono>
+#include <sys/time.h>
+#include <time.h>
 
-void timespec_diff(struct timespec *start, struct timespec *stop,
-                   struct timespec *result);
+void timespec_diff(struct timespec* start, struct timespec* stop,
+    struct timespec* result);
 
-long timespec_to_ms(struct timespec *spec);
+long timespec_to_ms(struct timespec* spec);
 
 void print_timespec(struct timespec time);
 
 #define hj_gettime(tm) \
-    clock_gettime (CLOCK_REALTIME, (tm))
+    clock_gettime(CLOCK_REALTIME, (tm))
 
-void hj_nanosleep (struct timespec *ts);
+void hj_nanosleep(struct timespec* ts);
 
 // We want to use clock_gettime()
 // If it doesn't work, try setting CPP_FLAGS "--enable-libstdcxx-time=yes"
@@ -67,12 +66,14 @@ namespace Timer {
 // Verified that G++ with -O2 optimization inlines these functions
 class Timer {
 public:
-    void start() {
+    void start()
+    {
         start_epoch_ = std::chrono::steady_clock::now();
     }
 
     template <typename UnitT = std::chrono::nanoseconds>
-    uint64_t stop() {
+    uint64_t stop()
+    {
         std::chrono::steady_clock::time_point stop_epoch;
         UnitT time_span;
 
@@ -81,10 +82,10 @@ public:
         return time_span.count();
     }
 
-    std::chrono::steady_clock::time_point now() {
+    std::chrono::steady_clock::time_point now()
+    {
         return std::chrono::steady_clock::now();
     }
-
 
 private:
     std::chrono::steady_clock::time_point start_epoch_;
@@ -92,4 +93,4 @@ private:
 
 }
 
-#endif  /* TIME_H */
+#endif /* TIME_H */

@@ -75,20 +75,20 @@ using namespace std;
 // Note that the struct's layout must be kept in sync with its counterpart in
 // Rust.
 struct RadixPartitionArgs {
-  // Inputs
-  const void *const __restrict__ join_attr_data;
-  const void *const __restrict__ payload_attr_data;
-  size_t const data_length;
-  size_t const padding_length;
-  uint32_t const radix_bits;
+    // Inputs
+    const void* const __restrict__ join_attr_data;
+    const void* const __restrict__ payload_attr_data;
+    size_t const data_length;
+    size_t const padding_length;
+    uint32_t const radix_bits;
 
-  // State
-  uint64_t *const __restrict__ tmp_partition_offsets;
-  void *const __restrict__ write_combine_buffer;
+    // State
+    uint64_t* const __restrict__ tmp_partition_offsets;
+    void* const __restrict__ write_combine_buffer;
 
-  // Outputs
-  uint64_t *const __restrict__ partition_offsets;
-  void *const __restrict__ partitioned_relation;
+    // Outputs
+    uint64_t* const __restrict__ partition_offsets;
+    void* const __restrict__ partitioned_relation;
 };
 
 // A key-value tuple.
@@ -97,8 +97,8 @@ struct RadixPartitionArgs {
 // Rust.
 template <typename K, typename V>
 struct Tuple {
-  K key;
-  V value;
+    K key;
+    V value;
 };
 
 // A set of buffers used for software write-combinining.
@@ -109,25 +109,25 @@ struct Tuple {
 // restored.
 template <typename T, uint32_t size>
 union WriteCombineBuffer {
-  struct {
-    T data[size / sizeof(T)];
-  } tuples;
+    struct {
+        T data[size / sizeof(T)];
+    } tuples;
 
-  struct {
-    T data[(size - sizeof(uint64_t)) / sizeof(T)];
-    char _padding[(size - sizeof(uint64_t)) -
-                  (((size - sizeof(uint64_t)) / sizeof(T)) * sizeof(T))];
-    uint64_t slot;  // Padding makes `slot` 8-byte aligned if sizeof(T) % 8 != 0
-  } meta;
+    struct {
+        T data[(size - sizeof(uint64_t)) / sizeof(T)];
+        char _padding[(size - sizeof(uint64_t)) - (((size - sizeof(uint64_t)) / sizeof(T)) * sizeof(T))];
+        uint64_t slot; // Padding makes `slot` 8-byte aligned if sizeof(T) % 8 != 0
+    } meta;
 
-  // Computes the number of tuples contained in a buffer.
-  static constexpr size_t tuples_per_buffer() { return size / sizeof(T); }
+    // Computes the number of tuples contained in a buffer.
+    static constexpr size_t tuples_per_buffer() { return size / sizeof(T); }
 } __attribute__((packed));
 
 // Computes the partition ID of a given key.
 template <typename T, typename B>
-size_t key_to_partition(T key, size_t mask, B bits) {
-  return (static_cast<size_t>(key) & mask) >> bits;
+size_t key_to_partition(T key, size_t mask, B bits)
+{
+    return (static_cast<size_t>(key) & mask) >> bits;
 }
 
 /*
@@ -184,135 +184,130 @@ void flush_buffer(void *const __restrict__ dst,
 //
 // See the Rust module for details.
 template <typename K, typename V>
-void cpu_chunked_radix_partition(RadixPartitionArgs &args) {
-  auto join_attr_data =
-      static_cast<const K *const __restrict__>(args.join_attr_data);
-  auto payload_attr_data =
-      static_cast<const V *const __restrict__>(args.payload_attr_data);
-  auto partitioned_relation =
-      static_cast<Tuple<K, V> *const __restrict__>(args.partitioned_relation);
+void cpu_chunked_radix_partition(RadixPartitionArgs& args)
+{
+    auto join_attr_data = static_cast<const K* const __restrict__>(args.join_attr_data);
+    auto payload_attr_data = static_cast<const V* const __restrict__>(args.payload_attr_data);
+    auto partitioned_relation = static_cast<Tuple<K, V>* const __restrict__>(args.partitioned_relation);
 
-  const size_t fanout = 1UL << args.radix_bits;
-  const size_t mask = fanout - 1;
+    const size_t fanout = 1UL << args.radix_bits;
+    const size_t mask = fanout - 1;
 
-  // Ensure counters are all zeroed
-  for (size_t i = 0; i < fanout; ++i) {
-    args.partition_offsets[i] = 0;
-  }
+    // Ensure counters are all zeroed
+    for (size_t i = 0; i < fanout; ++i) {
+        args.partition_offsets[i] = 0;
+    }
 
-  // 1. Compute local histograms per partition
-  for (size_t i = 0; i < args.data_length; ++i) {
-    auto key = join_attr_data[i];
-    auto p_index = key_to_partition(key, mask, 0);
-    args.partition_offsets[p_index] += 1;
-  }
+    // 1. Compute local histograms per partition
+    for (size_t i = 0; i < args.data_length; ++i) {
+        auto key = join_attr_data[i];
+        auto p_index = key_to_partition(key, mask, 0);
+        args.partition_offsets[p_index] += 1;
+    }
 
-  // 2. Compute offsets with exclusive prefix sum
-  for (size_t i = 0, sum = 0, offset = 0; i < fanout; ++i, offset = sum) {
-    sum += args.partition_offsets[i];
-    offset += (i + 1) * args.padding_length;
-    args.partition_offsets[i] = offset;
-    args.tmp_partition_offsets[i] = offset;
-  }
+    // 2. Compute offsets with exclusive prefix sum
+    for (size_t i = 0, sum = 0, offset = 0; i < fanout; ++i, offset = sum) {
+        sum += args.partition_offsets[i];
+        offset += (i + 1) * args.padding_length;
+        args.partition_offsets[i] = offset;
+        args.tmp_partition_offsets[i] = offset;
+    }
 
-  // 3. Partition
-  for (size_t i = 0; i < args.data_length; ++i) {
-    Tuple<K, V> tuple;
-    tuple.key = join_attr_data[i];
-    tuple.value = payload_attr_data[i];
+    // 3. Partition
+    for (size_t i = 0; i < args.data_length; ++i) {
+        Tuple<K, V> tuple;
+        tuple.key = join_attr_data[i];
+        tuple.value = payload_attr_data[i];
 
-    auto p_index = key_to_partition(tuple.key, mask, 0);
-    auto &offset = args.tmp_partition_offsets[p_index];
-    partitioned_relation[offset] = tuple;
-    offset += 1;
-  }
+        auto p_index = key_to_partition(tuple.key, mask, 0);
+        auto& offset = args.tmp_partition_offsets[p_index];
+        partitioned_relation[offset] = tuple;
+        offset += 1;
+    }
 }
 
 // Chunked radix partitioning with software write-combining.
 //
 // See the Rust module for details.
 template <typename K, typename V>
-void cpu_chunked_radix_partition_swwc(RadixPartitionArgs &args) {
-  constexpr size_t tuples_per_buffer =
-      WriteCombineBuffer<Tuple<K, V>, SWWC_BUFFER_SIZE>::tuples_per_buffer();
+void cpu_chunked_radix_partition_swwc(RadixPartitionArgs& args)
+{
+    constexpr size_t tuples_per_buffer = WriteCombineBuffer<Tuple<K, V>, SWWC_BUFFER_SIZE>::tuples_per_buffer();
 
-  // 512-bit intrinsics require 64-byte alignment
-  assert(reinterpret_cast<size_t>(args.write_combine_buffer) % 64 == 0);
+    // 512-bit intrinsics require 64-byte alignment
+    assert(reinterpret_cast<size_t>(args.write_combine_buffer) % 64 == 0);
 
-  // Padding must be a multiple of the buffer length.
-  assert(args.padding_length % tuples_per_buffer == 0);
+    // Padding must be a multiple of the buffer length.
+    assert(args.padding_length % tuples_per_buffer == 0);
 
-  auto join_attr_data =
-      static_cast<const K *const __restrict__>(args.join_attr_data);
-  auto payload_attr_data =
-      static_cast<const V *const __restrict__>(args.payload_attr_data);
-  auto partitioned_relation =
-      static_cast<Tuple<K, V> *const __restrict__>(args.partitioned_relation);
-  auto buffers = static_cast<
-      WriteCombineBuffer<Tuple<K, V>, SWWC_BUFFER_SIZE> *const __restrict__>(
-      args.write_combine_buffer);
+    auto join_attr_data = static_cast<const K* const __restrict__>(args.join_attr_data);
+    auto payload_attr_data = static_cast<const V* const __restrict__>(args.payload_attr_data);
+    auto partitioned_relation = static_cast<Tuple<K, V>* const __restrict__>(args.partitioned_relation);
+    auto buffers = static_cast<
+        WriteCombineBuffer<Tuple<K, V>, SWWC_BUFFER_SIZE>* const __restrict__>(
+        args.write_combine_buffer);
 
-  const size_t fanout = 1UL << args.radix_bits;
-  const size_t mask = fanout - 1;
+    const size_t fanout = 1UL << args.radix_bits;
+    const size_t mask = fanout - 1;
 
-  // Ensure counters are all zeroed
-  for (size_t i = 0; i < fanout; ++i) {
-    args.partition_offsets[i] = 0;
-  }
-
-  // 1. Compute local histograms per partition
-  for (size_t i = 0; i < args.data_length; ++i) {
-    auto key = join_attr_data[i];
-    auto p_index = key_to_partition(key, mask, 0);
-    args.partition_offsets[p_index] += 1;
-  }
-
-  // 2. Compute offsets with exclusive prefix sum
-  for (size_t i = 0, sum = 0, offset = 0; i < fanout; ++i, offset = sum) {
-    sum += args.partition_offsets[i];
-    offset += (i + 1) * args.padding_length;
-    args.partition_offsets[i] = offset;
-    buffers[i].meta.slot = offset;
-  }
-
-  // 3. Partition into software write combine buffers
-  for (size_t i = 0; i < args.data_length; ++i) {
-    Tuple<K, V> tuple;
-    tuple.key = join_attr_data[i];
-    tuple.value = payload_attr_data[i];
-
-    auto p_index = key_to_partition(tuple.key, mask, 0);
-    auto &buffer = buffers[p_index];
-
-    size_t slot = buffer.meta.slot;
-    size_t buffer_slot = slot % tuples_per_buffer;
-
-    // `buffer.meta.slot` is overwritten on buffer_slot == (tuples_per_buffer -
-    // 1), and restored after the buffer flush.
-    buffer.tuples.data[buffer_slot] = tuple;
-
-    // Flush buffer
-    // Can occur on partially filled buffer due to cache-line alignment,
-    // because first output slot might not be at offset % tuples_per_buffer == 0
-    if (buffer_slot + 1 == tuples_per_buffer) {
-      flush_buffer(partitioned_relation + (slot + 1) - tuples_per_buffer,
-                   buffer.tuples.data);
+    // Ensure counters are all zeroed
+    for (size_t i = 0; i < fanout; ++i) {
+        args.partition_offsets[i] = 0;
     }
 
-    // Restore `buffer.meta.slot` after overwriting it above, and increment its
-    // value.
-    buffer.meta.slot = slot + 1;
-  }
-
-  // Flush remainders of all buffers.
-  for (size_t i = 0; i < fanout; ++i) {
-    size_t slot = buffers[i].meta.slot;
-    size_t remaining = slot % tuples_per_buffer;
-
-    for (size_t j = slot - remaining, k = 0; k < remaining; ++j, ++k) {
-      partitioned_relation[j] = buffers[i].tuples.data[k];
+    // 1. Compute local histograms per partition
+    for (size_t i = 0; i < args.data_length; ++i) {
+        auto key = join_attr_data[i];
+        auto p_index = key_to_partition(key, mask, 0);
+        args.partition_offsets[p_index] += 1;
     }
-  }
+
+    // 2. Compute offsets with exclusive prefix sum
+    for (size_t i = 0, sum = 0, offset = 0; i < fanout; ++i, offset = sum) {
+        sum += args.partition_offsets[i];
+        offset += (i + 1) * args.padding_length;
+        args.partition_offsets[i] = offset;
+        buffers[i].meta.slot = offset;
+    }
+
+    // 3. Partition into software write combine buffers
+    for (size_t i = 0; i < args.data_length; ++i) {
+        Tuple<K, V> tuple;
+        tuple.key = join_attr_data[i];
+        tuple.value = payload_attr_data[i];
+
+        auto p_index = key_to_partition(tuple.key, mask, 0);
+        auto& buffer = buffers[p_index];
+
+        size_t slot = buffer.meta.slot;
+        size_t buffer_slot = slot % tuples_per_buffer;
+
+        // `buffer.meta.slot` is overwritten on buffer_slot == (tuples_per_buffer -
+        // 1), and restored after the buffer flush.
+        buffer.tuples.data[buffer_slot] = tuple;
+
+        // Flush buffer
+        // Can occur on partially filled buffer due to cache-line alignment,
+        // because first output slot might not be at offset % tuples_per_buffer == 0
+        if (buffer_slot + 1 == tuples_per_buffer) {
+            flush_buffer(partitioned_relation + (slot + 1) - tuples_per_buffer,
+                buffer.tuples.data);
+        }
+
+        // Restore `buffer.meta.slot` after overwriting it above, and increment its
+        // value.
+        buffer.meta.slot = slot + 1;
+    }
+
+    // Flush remainders of all buffers.
+    for (size_t i = 0; i < fanout; ++i) {
+        size_t slot = buffers[i].meta.slot;
+        size_t remaining = slot % tuples_per_buffer;
+
+        for (size_t j = slot - remaining, k = 0; k < remaining; ++j, ++k) {
+            partitioned_relation[j] = buffers[i].tuples.data[k];
+        }
+    }
 }
 
 /*

@@ -1,21 +1,21 @@
 #ifndef WORKER_H
 #define WORKER_H
 
-#include <chrono>
 #include "config.h"
 #include "parameter.h"
+#include <chrono>
 
 #include <stdio.h>
 #include <time.h>
 
 #include "data.h"
-#include "messages.h"
 #include "master.h"
+#include "messages.h"
 #include "statistics.h"
 
 struct worker_ctx_t {
     /* stores statistics */
-    statistics  stats;
+    statistics stats;
 
     /* use a range prediacate to join */
     bool range_predicate;
@@ -25,17 +25,17 @@ struct worker_ctx_t {
     unsigned s_first;
 
     /* index to newest tuples available by master */
-    unsigned *r_available;
-    unsigned *s_available;
+    unsigned* r_available;
+    unsigned* s_available;
 
     /* index to last processed tuple */
-    unsigned *r_processed;
-    unsigned *s_processed;
+    unsigned* r_processed;
+    unsigned* s_processed;
 
-    /* keeps track of time spent idle or processing */ 
+    /* keeps track of time spent idle or processing */
     std::chrono::time_point<std::chrono::steady_clock> proc_start_time;
     std::chrono::time_point<std::chrono::steady_clock> idle_start_time;
-    
+
     /* minimum and maximum frequencies */
     unsigned min_cpu_freq;
     unsigned max_cpu_freq;
@@ -48,18 +48,18 @@ struct worker_ctx_t {
     * Input data stream R
     */
     struct {
-	    long *t_ns;
-	    int *x;
-	    int *y;
+        long* t_ns;
+        int* x;
+        int* y;
     } R;
-    
+
     /**
     * Input data stream S
     */
     struct {
-	    long *t_ns;
-	    int *a;
-	    int *b;
+        long* t_ns;
+        int* a;
+        int* b;
     } S;
 
     /**
@@ -72,7 +72,7 @@ struct worker_ctx_t {
     frequency_mode_e frequency_mode;
 
     /* Pointer to the Buffer that the gpu uses to write to */
-    int *gpu_output_buffer;
+    int* gpu_output_buffer;
 
     /* Size of output buffer in bytes */
     int gpu_output_buffer_size;
@@ -85,7 +85,7 @@ struct worker_ctx_t {
 
     /** number of tuples in S (in sec) **/
     unsigned num_tuples_S;
-    
+
     /** number of tuples in R (in sec) **/
     unsigned num_tuples_R;
 
@@ -96,7 +96,7 @@ struct worker_ctx_t {
     /* enbable time sleep */
     bool time_sleep;
 
-    /* manage time sleep in worker*/ 
+    /* manage time sleep in worker*/
     bool time_sleep_control_in_worker;
 
     /* batch processing size in tuples */
@@ -119,16 +119,14 @@ struct worker_ctx_t {
     bool stop_signal_ack;
 
     /* File to write the result tuples to  */
-    FILE *resultfile;
+    FILE* resultfile;
 
     /* Tuple Threshold for cleanup step */
     unsigned cleanup_threshold;
 };
 
-
-
-void start_batch(master_ctx_t *ctx, worker_ctx_t *w_ctx);
-void start_stream(master_ctx_t *ctx, worker_ctx_t *w_ctx);
-void end_processing(worker_ctx_t *w_ctx);
-void emit_result (worker_ctx_t *w_ctx, unsigned int r, unsigned int s);
-#endif  /* WORKER_H */
+void start_batch(master_ctx_t* ctx, worker_ctx_t* w_ctx);
+void start_stream(master_ctx_t* ctx, worker_ctx_t* w_ctx);
+void end_processing(worker_ctx_t* w_ctx);
+void emit_result(worker_ctx_t* w_ctx, unsigned int r, unsigned int s);
+#endif /* WORKER_H */

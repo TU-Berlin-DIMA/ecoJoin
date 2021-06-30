@@ -14,23 +14,23 @@
 
 #include "config.h"
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-#include "time.h"
 #include "string.h"
+#include "time.h"
 
-#include <unistd.h>
 #include <iostream>
+#include <unistd.h>
 
 /*
  * Wait until timespec time is reached
  */
-void hj_nanosleep (timespec *ts)
+void hj_nanosleep(timespec* ts)
 {
     struct timeval t;
-    gettimeofday (&t, NULL);
+    gettimeofday(&t, NULL);
 
     long i = (ts->tv_sec * 1000000 + ts->tv_nsec / 1000) - (t.tv_sec * 1000000 + t.tv_usec);
     unsigned a = (ts->tv_sec * 1000000 + ts->tv_nsec / 1000) - (t.tv_sec * 1000000 + t.tv_usec);
@@ -42,23 +42,23 @@ void hj_nanosleep (timespec *ts)
     */
 
     if (i > 0)
-	    usleep(a);
+        usleep(a);
 }
 
 /*
  * Legacy implementation since busy waiting produces cpu overhead
  */
-void hj_nanosleep_legacy (timespec *ts)
+void hj_nanosleep_legacy(timespec* ts)
 {
     struct timeval t;
     do {
-        gettimeofday (&t, NULL);
+        gettimeofday(&t, NULL);
     } while (t.tv_sec * 1000000000 + t.tv_usec * 1000
-            < ts->tv_sec * 1000000000 + ts->tv_nsec);
+        < ts->tv_sec * 1000000000 + ts->tv_nsec);
 }
 
-void timespec_diff(struct timespec *start, struct timespec *stop,
-                   struct timespec *result)
+void timespec_diff(struct timespec* start, struct timespec* stop,
+    struct timespec* result)
 {
     if ((stop->tv_nsec - start->tv_nsec) < 0) {
         result->tv_sec = stop->tv_sec - start->tv_sec - 1;
@@ -71,11 +71,12 @@ void timespec_diff(struct timespec *start, struct timespec *stop,
     return;
 }
 
-long timespec_to_ms(struct timespec *spec){
-    long    ms; // Milliseconds
-    time_t    s;  // Seconds
+long timespec_to_ms(struct timespec* spec)
+{
+    long ms; // Milliseconds
+    time_t s; // Seconds
 
-    s  = spec->tv_sec;
+    s = spec->tv_sec;
     ms = round(spec->tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
     if (ms > 999) {
         s++;
@@ -85,7 +86,8 @@ long timespec_to_ms(struct timespec *spec){
 }
 
 // buf needs to store 30 characters
-int timespec2str(char *buf, unsigned int len, struct timespec *ts) {
+int timespec2str(char* buf, unsigned int len, struct timespec* ts)
+{
     int ret;
     struct tm t;
 
@@ -105,15 +107,16 @@ int timespec2str(char *buf, unsigned int len, struct timespec *ts) {
     return 0;
 }
 
-void print_timespec(struct timespec time){
-   	const uint TIME_FMT = strlen("2012-12-31 12:59:59.123456789") + 1;
-	char timestr[TIME_FMT];
+void print_timespec(struct timespec time)
+{
+    const uint TIME_FMT = strlen("2012-12-31 12:59:59.123456789") + 1;
+    char timestr[TIME_FMT];
 
-	struct timeval t;
+    struct timeval t;
 
-	if (timespec2str(timestr, sizeof(timestr), &time) != 0) {
-		printf("timespec2str failed!\n");
-	} else {
-		printf("CLOCK_REALTIME: time=%s\n", timestr);
-	}
+    if (timespec2str(timestr, sizeof(timestr), &time) != 0) {
+        printf("timespec2str failed!\n");
+    } else {
+        printf("CLOCK_REALTIME: time=%s\n", timestr);
+    }
 }
