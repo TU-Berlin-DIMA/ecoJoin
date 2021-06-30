@@ -1,7 +1,7 @@
 HASH     = 0
 DEBUG     = 0
 
-TARGET   = gpu_stream
+TARGET   = ecoJoin
 
 # Debug
 #CUFLAGS  = -std=c++11 -gencode arch=compute_53,code=sm_53 -g -Xcompiler=-fopenmp -Xcompiler=-fno-omit-frame-pointer --profile
