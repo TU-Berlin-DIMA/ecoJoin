@@ -58,7 +58,7 @@ Usage:
   -e end when worker ends
 ```
 
-For energy measures using a ARM Energy Probe take a look at: [Conducting an energy measure](Energy-measure.md)
+For energy measures using a ARM Energy Probe take a look at: [conducting an energy measure](Energy-Measure.md)
 
 ## Publication
 **Abstract:**
